@@ -1160,11 +1160,11 @@ function renderEditorFields() {
             return;
         }
         if (activeTab.toLowerCase() === "tournaments" && normalizedLabel === "tier") {
-            editFormFields.appendChild(createFixedSelectField(label, index, ["1", "2"]));
+            editFormFields.appendChild(createFixedSelectField(label, index, ["1", "2", "MAJOR"]));
             return;
         }
         if (activeTab.toLowerCase() === "tournaments" && normalizedLabel === "type") {
-            editFormFields.appendChild(createFixedSelectField(label, index, ["LAN", "ONLINE"]));
+            editFormFields.appendChild(createFixedSelectField(label, index, ["LAN", "ONLINE", "MAJOR"]));
             return;
         }
         if (activeTab.toLowerCase() === "sponsors" && normalizedLabel === "tier") {
