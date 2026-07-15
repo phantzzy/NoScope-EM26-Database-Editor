@@ -1,0 +1,182 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoScope</title>
+    <link rel="icon" type="image/png" href="assets/branding/NoScope.png">
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+        <filter id="remove-placeholder-green" color-interpolation-filters="sRGB">
+            <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 -1 0 0 1"/>
+        </filter>
+    </svg>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="title-area">
+                <img class="brand-logo" src="assets/branding/NoScope.png" alt="NoScope logo">
+                <h1>NoScope</h1>
+                <span class="subtitle">EM2026 Database Editor</span>
+            </div>
+        </header>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <button class="btn btn-primary" id="btn-open">
+                <span class="btn-icon" aria-hidden="true">&#128193;</span> <span id="lbl-open">Open .emdb...</span>
+            </button>
+            <button class="btn btn-secondary" id="btn-load-default">
+                <span class="btn-icon" aria-hidden="true">&#8635;</span> Load Default DB
+            </button>
+            <button class="btn btn-secondary" id="btn-open-folder">
+                <span class="btn-icon" aria-hidden="true">&#128194;</span> <span id="lbl-open-folder">Open CSV folder...</span>
+            </button>
+            <input type="file" id="file-input" accept=".emdb" style="display: none;">
+            <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
+            
+            <div class="separator"></div>
+            
+            <button class="btn btn-primary" id="btn-save" disabled>
+                <span class="btn-icon" aria-hidden="true">&#128190;</span> <span id="lbl-save">Save as .emdb...</span>
+            </button>
+            <button class="btn btn-secondary" id="btn-export-csvs" disabled>
+                <span class="btn-icon" aria-hidden="true">&#128230;</span> <span id="lbl-export-csvs">Export CSVs (ZIP)</span>
+            </button>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">No file loaded.</span>
+        </div>
+
+        <!-- Main Content / Editor -->
+        <main class="main-content" id="main-content">
+            <div class="empty-state" id="empty-state">
+                <div class="empty-icon" aria-hidden="true">&#128193;</div>
+                <h2 id="lbl-empty-title">No EMDB Loaded</h2>
+                <p id="lbl-empty-desc">Click "Open .emdb..." to get started.</p>
+            </div>
+            
+            <div class="editor-area" id="editor-area" style="display: none;">
+                <div class="tabs" id="tabs">
+                    <!-- Tabs will be generated here -->
+                </div>
+                
+                <div class="tab-toolbar">
+                    <div class="toolbar-left">
+                        <button class="btn btn-primary" id="btn-add-row">Add</button>
+                        <button class="btn btn-danger" id="btn-delete-row">Remove</button>
+                        <span class="hint">Choose a card, then use Edit to change its details.</span>
+                    </div>
+                    <div class="toolbar-right">
+                        <div class="view-switcher" role="group" aria-label="View style">
+                            <button class="view-button active" id="btn-grid-view" type="button" title="Grid view">&#9638;</button>
+                            <button class="view-button" id="btn-list-view" type="button" title="List view">&#9776;</button>
+                        </div>
+                        <input type="text" class="search-input" id="search-input" placeholder="Search...">
+                        <button class="btn btn-secondary" id="btn-filter" type="button">Filter</button>
+                        <button class="btn btn-secondary" id="btn-compare" type="button" hidden>Compare</button>
+                        <button class="btn" id="btn-search">Search</button>
+                    </div>
+                </div>
+
+                <div class="table-container" id="table-container">
+                    <!-- The active card grid will be rendered here -->
+                </div>
+                <nav class="pagination" id="pagination" aria-label="Database pages"></nav>
+            </div>
+        </main>
+
+        <div class="modal-backdrop filter-modal-backdrop" id="filter-modal" hidden>
+            <section class="filter-modal" role="dialog" aria-modal="true" aria-labelledby="filter-modal-title">
+                <header class="modal-header">
+                    <div><span class="eyebrow">Entry filters</span><h2 id="filter-modal-title">FILTER PLAYERS</h2></div>
+                    <button class="icon-button" id="btn-close-filter" type="button" aria-label="Close">&times;</button>
+                </header>
+                <div class="filter-modal-content" id="filter-modal-content"></div>
+                <footer class="filter-modal-actions">
+                    <button class="btn btn-secondary" id="btn-clear-filters" type="button">Clear all</button>
+                    <div>
+                        <button class="btn btn-secondary" id="btn-cancel-filter" type="button">Cancel</button>
+                        <button class="btn btn-primary" id="btn-apply-filters" type="button">Apply filters</button>
+                    </div>
+                </footer>
+            </section>
+        </div>
+
+        <div class="modal-backdrop compare-modal-backdrop" id="compare-modal" hidden>
+            <section class="compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-modal-title">
+                <header class="modal-header">
+                    <div><span class="eyebrow">Player analysis</span><h2 id="compare-modal-title">PLAYER COMPARISON</h2></div>
+                    <button class="icon-button" id="btn-close-compare" type="button" aria-label="Close">&times;</button>
+                </header>
+                <div class="compare-selectors">
+                    <label><span>PLAYER ONE</span><input id="compare-search-one" type="search" placeholder="Search nick, name, team..."><select id="compare-player-one"></select></label>
+                    <span class="compare-versus">VS</span>
+                    <label><span>PLAYER TWO</span><input id="compare-search-two" type="search" placeholder="Search nick, name, team..."><select id="compare-player-two"></select></label>
+                </div>
+                <div class="compare-content" id="compare-content"></div>
+                <footer class="compare-actions"><button class="btn btn-secondary" id="btn-close-compare-footer" type="button">Close</button></footer>
+            </section>
+        </div>
+        <div class="modal-backdrop" id="edit-modal" hidden>
+            <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+                <div class="modal-header">
+                    <div><span class="eyebrow" id="edit-modal-context">Database entry</span><h2 id="edit-modal-title">Edit entry</h2></div>
+                    <div class="modal-header-actions">
+                        <button class="link-button" id="btn-copy-asset-link" type="button" hidden><span aria-hidden="true">&#128279;</span> LINK</button>
+                        <button class="icon-button" id="btn-close-editor" type="button" aria-label="Close">&times;</button>
+                    </div>
+            </div>
+            <form id="edit-form">
+                <nav class="editor-nav" id="editor-nav" aria-label="Editor sections">
+                    <button class="editor-nav-button active" type="button" data-editor-page="general">Identity</button>
+                    <button class="editor-nav-button" type="button" data-editor-page="stats">Skills</button>
+                    <button class="editor-nav-button" type="button" data-editor-page="details">Details</button>
+                </nav>
+                <div class="stats-nav" id="stats-nav" hidden>
+                    <button class="stats-nav-button active" type="button" data-stats-page="gameplay">Gameplay</button>
+                    <button class="stats-nav-button" type="button" data-stats-page="physical">Physical</button>
+                    <button class="stats-nav-button" type="button" data-stats-page="mental">Mental</button>
+                </div>
+                <section class="asset-editor" id="asset-editor" hidden>
+                    <div class="asset-preview" id="asset-preview"><span>No image</span></div>
+                    <div class="asset-editor-copy">
+                        <h3 id="asset-editor-title">Player image</h3>
+                        <p>Use the bundled CustomAssets image or choose a local override. Player files are matched using Internal ID or nickname.</p>
+                        <div class="asset-actions">
+                            <label class="btn btn-secondary" for="asset-file-input">Choose image</label>
+                            <input id="asset-file-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                            <button class="btn btn-danger" id="btn-remove-asset" type="button">Remove</button>
+                        </div>
+                    </div>
+                </section>
+                <div class="editor-page-heading">
+                    <div><h3 id="editor-page-title">General information</h3><p id="editor-page-description">Identity and team information for this player.</p></div>
+                    <span id="editor-field-count"></span>
+                </div>
+                <div class="form-grid" id="edit-form-fields"></div>
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" id="btn-cancel-edit" type="button">Cancel</button>
+                        <button class="btn btn-primary" id="btn-submit-edit" type="submit">Save changes</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+
+    <script src="js/asset-manifest.js"></script>
+    <script src="js/asset-db.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>

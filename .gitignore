@@ -1,0 +1,26 @@
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.tmp
+
+# Local logs and caches
+*.log
+.cache/
+tmp/
+
+# Future JavaScript/app dependencies and builds
+node_modules/
+dist/
+build/
+release/
+
+# Local environment and signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.key
