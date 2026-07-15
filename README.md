@@ -13,7 +13,6 @@ Browser-based editor for Esports Manager `.emdb` databases.
 - `assets/custom/` — entity images grouped by database category
 - `data/` — bundled and archived `.emdb` databases
 - `tools/` — development and asset-generation scripts
-- `legacy/` — previous standalone HTML export kept for reference
 
 ## Regenerating the asset manifest
 
