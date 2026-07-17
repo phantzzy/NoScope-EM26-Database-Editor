@@ -11,6 +11,11 @@ Thumbs.db
 .cache/
 tmp/
 
+# Local agent files and working notes
+.agents/
+TODO.md
+CHANGELOG.md
+
 # Future JavaScript/app dependencies and builds
 node_modules/
 dist/

@@ -27,30 +27,42 @@
                 <h1>NoScope</h1>
                 <span class="subtitle">EM2026 Database Editor</span>
             </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" id="btn-guide" type="button">
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h10a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3V4a1 1 0 0 1 1-1Zm2 13.25A3 3 0 0 1 9 16h8V6a1 1 0 0 0-1-1H7v11.42c.3-.11.64-.17 1-.17ZM9 18a1 1 0 0 0 0 2h8v-2H9Zm1-10h4v2h-4V8Zm0 3h6v2h-6v-2Z"/></svg></span> Guide
+                </button>
+                <button class="btn btn-secondary" id="btn-library" type="button">
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h12a2 2 0 0 1 2 2v14H7a3 3 0 0 1-3-3V5a1 1 0 0 1 1-1Zm2 12.25A3 3 0 0 1 8 16h9V6H6v10.42c.3-.11.64-.17 1-.17ZM8 18a1 1 0 0 0 0 2h11v-2H8Zm1-9h5v2H9V9Zm0 3h7v2H9v-2Z"/></svg></span> Library
+                </button>
+                <button class="btn btn-secondary" id="btn-assets" type="button">
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Zm2 0v9.6l3.1-3.1a1 1 0 0 1 1.42.01L13 14l1.48-1.48a1 1 0 0 1 1.41 0L18 14.63V5H6Zm0 12.43V19h12v-1.54l-2.82-2.82-1.48 1.48a1 1 0 0 1-1.4 0l-2.5-2.49L6 17.43ZM15.5 7a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z"/></svg></span> Assets
+                </button>
+            </div>
         </header>
 
         <!-- Toolbar -->
         <div class="toolbar">
-            <button class="btn btn-primary" id="btn-open">
-                <span class="btn-icon" aria-hidden="true">&#128193;</span> <span id="lbl-open">Open .emdb...</span>
-            </button>
-            <button class="btn btn-secondary" id="btn-load-default">
-                <span class="btn-icon" aria-hidden="true">&#8635;</span> Load Default DB
-            </button>
-            <button class="btn btn-secondary" id="btn-open-folder">
-                <span class="btn-icon" aria-hidden="true">&#128194;</span> <span id="lbl-open-folder">Open CSV folder...</span>
-            </button>
+            <div class="toolbar-file-actions">
+                <button class="btn btn-primary" id="btn-open">
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v1H3v-3Zm0 5h18l-1.45 6.08A3 3 0 0 1 16.63 20H6.37a3 3 0 0 1-2.92-2.42L2 11.5h1Z"/></svg></span> <span id="lbl-open">Open .emdb...</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-load-default">
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 1-6.32 4H3.4A9 9 0 1 0 12 3V1L8 4l4 3V5Zm1 4v4.6l3.2 1.9-1 1.7-4.2-2.5V9h2Z"/></svg></span> Load Default DB
+                </button>
+                <button class="btn btn-secondary" id="btn-open-folder">
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5V10H3V6.5Zm0 5h8.5l1.75 2H21v4A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-6Z"/></svg></span> <span id="lbl-open-folder">Open CSV folder...</span>
+                </button>
+            </div>
             <input type="file" id="file-input" accept=".emdb" style="display: none;">
             <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
-            
-            <div class="separator"></div>
-            
-            <button class="btn btn-primary" id="btn-save" disabled>
-                <span class="btn-icon" aria-hidden="true">&#128190;</span> <span id="lbl-save">Save as .emdb...</span>
-            </button>
-            <button class="btn btn-secondary" id="btn-export-csvs" disabled>
-                <span class="btn-icon" aria-hidden="true">&#128230;</span> <span id="lbl-export-csvs">Export CSVs (ZIP)</span>
-            </button>
+            <div class="toolbar-save-actions">
+                <button class="btn btn-primary" id="btn-save" disabled>
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 2v6h9V5H7Zm0 14h10v-5H7v5Zm7-13v3h2V6h-2Z"/></svg></span> <span id="lbl-save">Save as .emdb...</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-export-csvs" disabled>
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v12l8 4 8-4V6l-8-4Zm0 2.24L17.76 7 12 9.76 6.24 7 12 4.24ZM6 8.62l5 2.39v8.36l-5-2.5V8.62Zm7 10.75v-8.36l5-2.39v8.25l-5 2.5Z"/></svg></span> <span id="lbl-export-csvs">Export CSVs (ZIP)</span>
+                </button>
+            </div>
         </div>
 
         <!-- Status Bar -->
@@ -76,17 +88,34 @@
                     <div class="toolbar-left">
                         <button class="btn btn-primary" id="btn-add-row">Add</button>
                         <button class="btn btn-danger" id="btn-delete-row">Remove</button>
+                        <button class="btn btn-secondary" id="btn-deselect-all" type="button" hidden>Deselect all</button>
                         <span class="hint">Choose a card, then use Edit to change its details.</span>
                     </div>
                     <div class="toolbar-right">
-                        <div class="view-switcher" role="group" aria-label="View style">
-                            <button class="view-button active" id="btn-grid-view" type="button" title="Grid view">&#9638;</button>
-                            <button class="view-button" id="btn-list-view" type="button" title="List view">&#9776;</button>
+                        <div class="player-grid-sort" id="player-grid-sort" hidden>
+                            <label>
+                                <span>Sort</span>
+                                <select id="player-grid-sort-key">
+                                    <option value="alphabetical">Alphabetical</option>
+                                    <option value="leaderboard">Rating</option>
+                                    <option value="teamErs">Team ERS</option>
+                                </select>
+                            </label>
+                            <button class="grid-sort-direction" id="player-grid-sort-direction" type="button" aria-label="Sort ascending">↑</button>
+                        </div>
+                        <div class="list-view-presets" id="list-view-presets" hidden>
+                            <label>
+                                <span>View</span>
+                                <select id="list-view-preset"></select>
+                            </label>
                         </div>
                         <input type="text" class="search-input" id="search-input" placeholder="Search...">
                         <button class="btn btn-secondary" id="btn-filter" type="button">Filter</button>
                         <button class="btn btn-secondary" id="btn-compare" type="button" hidden>Compare</button>
-                        <button class="btn" id="btn-search">Search</button>
+                        <div class="view-switcher" role="group" aria-label="View style">
+                            <button class="view-button active" id="btn-grid-view" type="button" title="Grid view">&#9638;</button>
+                            <button class="view-button" id="btn-list-view" type="button" title="List view">&#9776;</button>
+                        </div>
                     </div>
                 </div>
 
@@ -129,6 +158,113 @@
                 <footer class="compare-actions"><button class="btn btn-secondary" id="btn-close-compare-footer" type="button">Close</button></footer>
             </section>
         </div>
+        <div class="modal-backdrop guide-modal-backdrop" id="guide-modal" hidden>
+            <section class="guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-modal-title">
+                <header class="modal-header">
+                    <div><span class="eyebrow">NoScope guide</span><h2 id="guide-modal-title">HOW EVERYTHING WORKS</h2></div>
+                    <button class="icon-button" id="btn-close-guide" type="button" aria-label="Close">&times;</button>
+                </header>
+                <div class="guide-modal-content">
+                    <aside class="guide-quickstart">
+                        <h3>Quick start</h3>
+                        <ol>
+                            <li>Load a database from Library, Open .emdb, CSV folder, or the bundled default DB.</li>
+                            <li>Choose a table tab: Players, Teams, Staff, Sponsors, or Tournaments.</li>
+                            <li>Use grid cards for visual editing, or list view for spreadsheet-style scanning.</li>
+                            <li>Select a row or card, then press the edit icon to change values and assets.</li>
+                            <li>Save as .emdb or export CSVs when you are done.</li>
+                        </ol>
+                    </aside>
+                    <div class="guide-grid">
+                        <section class="guide-card">
+                            <h3>Databases</h3>
+                            <p>Use Library for bundled databases, Load Default DB for the NoScope default, Open .emdb for a local package, or Open CSV folder for loose table files.</p>
+                            <p>Save as .emdb creates a game-ready database package. Export CSVs creates a ZIP of the editable table files.</p>
+                        </section>
+                        <section class="guide-card">
+                            <h3>Cards And Lists</h3>
+                            <p>Grid view shows visual cards. Player, staff, sponsor, and team cards can flip after hovering to reveal extra information.</p>
+                            <p>List view is for scanning. Some tables have custom view presets, such as player attribute groups, staff role attributes, and team rosters.</p>
+                        </section>
+                        <section class="guide-card">
+                            <h3>Sorting And Search</h3>
+                            <p>The search box filters as you type. Sort controls change depending on the active table.</p>
+                            <p>Players sort by rating leaderboard, name, or Team ERS. Teams sort by ERS or name. Sponsors sort by tier or name. Staff sort by role-aware rating, name, or Team ERS.</p>
+                        </section>
+                        <section class="guide-card">
+                            <h3>Editing</h3>
+                            <p>The editor separates identity, skills, details, and team roster tools where applicable. Calculated ratings are refreshed automatically when relevant attributes are saved.</p>
+                            <p>Use Add to create a row, Remove to delete selected rows, and Deselect all to clear multi-selection.</p>
+                        </section>
+                        <section class="guide-card">
+                            <h3>Teams And Rosters</h3>
+                            <p>Team editor roster view lets you drag players to reorder main squad and bench. The first five assigned players are treated as main squad; remaining players are bench.</p>
+                            <p>Team list roster view and flipped team cards use the same roster matching logic.</p>
+                        </section>
+                        <section class="guide-card">
+                            <h3>Images And Assets</h3>
+                            <p>Images are matched by stable identifiers such as internal ID, nickname, name, or team ID. Use the asset editor inside an entry to choose or remove a local image override.</p>
+                            <p>The Assets button opens the CustomAssets Google Drive folder for shared image files.</p>
+                        </section>
+                        <section class="guide-card">
+                            <h3>Filters And Compare</h3>
+                            <p>Filter opens table-specific filters for narrowing the current table. Compare appears for Players and lets you inspect two player profiles side by side.</p>
+                        </section>
+                        <section class="guide-card">
+                            <h3>Localhost Note</h3>
+                            <p>Some browser security rules block bundled database loading from a direct file path. If Library cannot read databases, open the app through localhost.</p>
+                        </section>
+                    </div>
+                </div>
+                <footer class="guide-modal-actions">
+                    <button class="btn btn-secondary" id="btn-close-guide-footer" type="button">Close</button>
+                </footer>
+            </section>
+        </div>
+        <div class="modal-backdrop library-modal-backdrop" id="library-modal" hidden>
+            <section class="library-modal" role="dialog" aria-modal="true" aria-labelledby="library-modal-title">
+                <header class="modal-header">
+                    <div><span class="eyebrow">Database library</span><h2 id="library-modal-title">YOUR DATABASES</h2></div>
+                    <button class="icon-button" id="btn-close-library" type="button" aria-label="Close">&times;</button>
+                </header>
+                <div class="library-modal-content">
+                    <div class="library-database-list" id="library-database-list">
+                        <div class="library-loading">Loading database library...</div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <div class="modal-backdrop assets-modal-backdrop" id="assets-modal" hidden>
+            <section class="assets-modal" role="dialog" aria-modal="true" aria-labelledby="assets-modal-title">
+                <header class="modal-header">
+                    <div><span class="eyebrow">Asset library</span><h2 id="assets-modal-title">CUSTOMASSETS</h2></div>
+                    <button class="icon-button" id="btn-close-assets" type="button" aria-label="Close">&times;</button>
+                </header>
+                <div class="assets-panel-content">
+                    <a class="asset-link-card" href="https://drive.google.com/drive/folders/1g1VSuo9DTXzzkmlmCyqXDhEUXX38opZ2?usp=drive_link" target="_blank" rel="noopener">
+                        <span class="asset-link-icon google-drive-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="drive-green" d="M8.35 3h7.3l6.35 11h-7.32L8.35 3Z"/><path class="drive-yellow" d="M8.35 3 2 14l3.67 6.35 6.34-11L8.35 3Z"/><path class="drive-blue" d="M5.67 20.35h12.66L22 14H9.33L5.67 20.35Z"/></svg></span>
+                        <span><strong>Open CustomAssets</strong><small>Google Drive</small></span>
+                    </a>
+                </div>
+                <footer class="assets-modal-actions">
+                    <button class="btn btn-secondary" id="btn-close-assets-footer" type="button">Close</button>
+                </footer>
+            </section>
+        </div>
+        <div class="modal-backdrop confirm-modal-backdrop" id="confirm-modal" hidden>
+            <section class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-message">
+                <div class="confirm-modal-icon" aria-hidden="true">!</div>
+                <div class="confirm-modal-copy">
+                    <span class="eyebrow">Confirm action</span>
+                    <h2 id="confirm-modal-title">REMOVE ENTRY?</h2>
+                    <p id="confirm-modal-message">This entry will be permanently removed from the database.</p>
+                </div>
+                <div class="confirm-modal-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-confirm" type="button">Cancel</button>
+                    <button class="btn btn-danger" id="btn-accept-confirm" type="button">Remove</button>
+                </div>
+            </section>
+        </div>
         <div class="modal-backdrop" id="edit-modal" hidden>
             <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
                 <div class="modal-header">
@@ -143,6 +279,7 @@
                     <button class="editor-nav-button active" type="button" data-editor-page="general">Identity</button>
                     <button class="editor-nav-button" type="button" data-editor-page="stats">Skills</button>
                     <button class="editor-nav-button" type="button" data-editor-page="details">Details</button>
+                    <button class="editor-nav-button" type="button" data-editor-page="roster" hidden>Roster</button>
                 </nav>
                 <div class="stats-nav" id="stats-nav" hidden>
                     <button class="stats-nav-button active" type="button" data-stats-page="gameplay">Gameplay</button>
