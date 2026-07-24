@@ -1,0 +1,18 @@
+[
+  {
+    "id": "2026-07-24",
+    "title": "NoScope v2.1.0",
+    "version": "v2.1.0",
+    "date": "2026-07-24",
+    "file": "changelogs/2026-07-24-v2.1.0.md",
+    "current": true
+  },
+  {
+    "id": "v2.0.0",
+    "title": "NoScope v2.0.0",
+    "version": "v2.0.0",
+    "date": "2026-07-17",
+    "file": "changelogs/2026-07-17-v2.0.0.md",
+    "current": false
+  }
+]

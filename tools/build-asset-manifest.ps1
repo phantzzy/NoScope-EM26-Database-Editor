@@ -31,5 +31,5 @@ $manifest["Countries"] = $countries
 
 $json = $manifest | ConvertTo-Json -Depth 4 -Compress
 $content = "window.NOSCOPE_ASSETS = $json;"
-Set-Content -LiteralPath (Join-Path $projectRoot "js\asset-manifest.js") -Value $content -Encoding utf8
-Write-Output "Generated asset-manifest.js with $((($manifest.Values | ForEach-Object Count) | Measure-Object -Sum).Sum) entries."
+Set-Content -LiteralPath (Join-Path $projectRoot "js\generated\asset-manifest.js") -Value $content -Encoding utf8
+Write-Output "Generated js/generated/asset-manifest.js with $((($manifest.Values | ForEach-Object Count) | Measure-Object -Sum).Sum) entries."

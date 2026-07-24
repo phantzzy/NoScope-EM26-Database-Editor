@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NoScope</title>
     <link rel="icon" type="image/png" href="assets/branding/NoScope.png">
+    <link rel="stylesheet" href="assets/vendor/flag-icons/css/flag-icons.min.css">
     <link rel="stylesheet" href="css/styles.css">
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -19,6 +20,14 @@
             <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 -1 0 0 1"/>
         </filter>
     </svg>
+    <div class="database-loading-screen" id="database-loading-screen" hidden role="status" aria-live="polite" aria-label="Loading database">
+        <div class="database-loading-card">
+            <img class="database-loading-logo" src="assets/branding/NoScope.png" alt="NoScope logo">
+            <div class="database-loading-spinner" aria-hidden="true"></div>
+            <strong id="database-loading-percent">0%</strong>
+            <span id="database-loading-message">Loading database...</span>
+        </div>
+    </div>
     <div class="app-container">
         <!-- Header -->
         <header class="header">
@@ -26,10 +35,23 @@
                 <img class="brand-logo" src="assets/branding/NoScope.png" alt="NoScope logo">
                 <h1>NoScope</h1>
                 <span class="subtitle">EM2026 Database Editor</span>
+                <nav class="brand-external-links" aria-label="Esports Manager 2026 links">
+                    <a class="brand-external-link" href="https://store.steampowered.com/app/2749950/Esports_Manager_2026/" target="_blank" rel="noopener noreferrer" aria-label="Esports Manager 2026 on Steam" title="Esports Manager 2026 on Steam">
+                        <span class="brand-external-mark steam" aria-hidden="true"></span>
+                        <span class="brand-external-link-label">Steam</span>
+                    </a>
+                    <a class="brand-external-link" href="https://discord.com/invite/esportsmanager" target="_blank" rel="noopener noreferrer" aria-label="Esports Manager 2026 Discord server" title="Esports Manager 2026 Discord server">
+                        <span class="brand-external-mark discord" aria-hidden="true"></span>
+                        <span class="brand-external-link-label">Discord</span>
+                    </a>
+                </nav>
             </div>
             <div class="header-actions">
                 <button class="btn btn-secondary" id="btn-guide" type="button">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h10a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3V4a1 1 0 0 1 1-1Zm2 13.25A3 3 0 0 1 9 16h8V6a1 1 0 0 0-1-1H7v11.42c.3-.11.64-.17 1-.17ZM9 18a1 1 0 0 0 0 2h8v-2H9Zm1-10h4v2h-4V8Zm0 3h6v2h-6v-2Z"/></svg></span> Guide
+                </button>
+                <button class="btn btn-secondary" id="btn-changelog" type="button">
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm1 4v2h2V7H7Zm4 0v2h6V7h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Z"/></svg></span> Changelog
                 </button>
                 <button class="btn btn-secondary" id="btn-library" type="button">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h12a2 2 0 0 1 2 2v14H7a3 3 0 0 1-3-3V5a1 1 0 0 1 1-1Zm2 12.25A3 3 0 0 1 8 16h9V6H6v10.42c.3-.11.64-.17 1-.17ZM8 18a1 1 0 0 0 0 2h11v-2H8Zm1-9h5v2H9V9Zm0 3h7v2H9v-2Z"/></svg></span> Library
@@ -37,6 +59,7 @@
                 <button class="btn btn-secondary" id="btn-assets" type="button">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Zm2 0v9.6l3.1-3.1a1 1 0 0 1 1.42.01L13 14l1.48-1.48a1 1 0 0 1 1.41 0L18 14.63V5H6Zm0 12.43V19h12v-1.54l-2.82-2.82-1.48 1.48a1 1 0 0 1-1.4 0l-2.5-2.49L6 17.43ZM15.5 7a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z"/></svg></span> Assets
                 </button>
+                <button class="btn btn-secondary theme-toggle" id="btn-theme-toggle" type="button" aria-label="Switch to light mode" title="Switch to light mode"></button>
             </div>
         </header>
 
@@ -52,9 +75,22 @@
                 <button class="btn btn-secondary" id="btn-open-folder">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5V10H3V6.5Zm0 5h8.5l1.75 2H21v4A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-6Z"/></svg></span> <span id="lbl-open-folder">Open CSV folder...</span>
                 </button>
+                <button class="btn btn-secondary validator-trigger" id="btn-validate-database" type="button" disabled>
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 4.5 5v6.2c0 4.7 3 8.5 7.5 10.3 4.5-1.8 7.5-5.6 7.5-10.3V5L12 2.5Zm-1.1 13.2-3.2-3.2 1.5-1.5 1.7 1.7 4-4 1.5 1.5-5.5 5.5Z"/></svg></span>
+                    Validate
+                </button>
+                <button class="btn btn-secondary merge-trigger" id="btn-merge-databases" type="button" disabled>
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4h11l-3-3 1.4-1.4L22.8 6l-6.4 6.4L15 11l3-3H7V4ZM17 20H6l3 3-1.4 1.4L1.2 18l6.4-6.4L9 13l-3 3h11v4Z"/></svg></span>
+                    Merge <span class="beta-badge">Beta</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-undo-merge" type="button" hidden>
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7V3L2 9l7 6v-4c5 0 8.5 1.6 11 5-1-5.2-4.2-9-11-9Z"/></svg></span>
+                    Undo merge
+                </button>
             </div>
             <input type="file" id="file-input" accept=".emdb" style="display: none;">
             <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
+            <input type="file" id="merge-file-input" accept=".emdb" hidden>
             <div class="toolbar-save-actions">
                 <button class="btn btn-primary" id="btn-save" disabled>
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 2v6h9V5H7Zm0 14h10v-5H7v5Zm7-13v3h2V6h-2Z"/></svg></span> <span id="lbl-save">Save as .emdb...</span>
@@ -88,6 +124,7 @@
                     <div class="toolbar-left">
                         <button class="btn btn-primary" id="btn-add-row">Add</button>
                         <button class="btn btn-danger" id="btn-delete-row">Remove</button>
+                        <button class="btn btn-secondary mass-edit-trigger" id="btn-mass-edit" type="button" hidden disabled>Mass edit <span class="beta-badge">Beta</span></button>
                         <button class="btn btn-secondary" id="btn-deselect-all" type="button" hidden>Deselect all</button>
                         <span class="hint">Choose a card, then use Edit to change its details.</span>
                     </div>
@@ -98,6 +135,7 @@
                                 <select id="player-grid-sort-key">
                                     <option value="alphabetical">Alphabetical</option>
                                     <option value="leaderboard">Rating</option>
+                                    <option value="potential">Potential</option>
                                     <option value="teamErs">Team ERS</option>
                                 </select>
                             </label>
@@ -143,6 +181,87 @@
             </section>
         </div>
 
+        <div class="modal-backdrop mass-edit-modal-backdrop" id="mass-edit-modal" hidden>
+            <section class="mass-edit-modal" role="dialog" aria-modal="true" aria-labelledby="mass-edit-modal-title">
+                <header class="modal-header">
+                    <div><span class="eyebrow">Selected players</span><div class="mass-edit-title-row"><h2 id="mass-edit-modal-title">MASS EDIT</h2><span class="beta-badge">Beta</span></div></div>
+                    <button class="icon-button" id="btn-close-mass-edit" type="button" aria-label="Close">&times;</button>
+                </header>
+                <div class="mass-edit-tier-toolbar">
+                    <span>Set checked fields</span>
+                    <button type="button" data-mass-tier-min="19" data-mass-tier-max="20">T1 <small>19-20</small></button>
+                    <button type="button" data-mass-tier-min="15" data-mass-tier-max="18">T2 <small>15-18</small></button>
+                    <button type="button" data-mass-tier-min="11" data-mass-tier-max="14">T3 <small>11-14</small></button>
+                    <button type="button" data-mass-tier-min="7" data-mass-tier-max="10">T4 <small>7-10</small></button>
+                    <button type="button" data-mass-tier-min="1" data-mass-tier-max="6">T5 <small>1-6</small></button>
+                </div>
+                <div class="mass-edit-content" id="mass-edit-content"></div>
+                <p class="mass-edit-feedback" id="mass-edit-feedback" role="alert" hidden></p>
+                <footer class="mass-edit-actions">
+                    <div>
+                        <button class="btn btn-secondary" id="btn-mass-select-all" type="button">Select all</button>
+                        <button class="btn btn-secondary" id="btn-mass-select-none" type="button">Select none</button>
+                        <button class="btn btn-secondary" id="btn-mass-reset-ranges" type="button">Reset ranges</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary" id="btn-cancel-mass-edit" type="button">Cancel</button>
+                        <button class="btn btn-primary" id="btn-apply-mass-edit" type="button">Apply</button>
+                    </div>
+                </footer>
+            </section>
+        </div>
+
+        <div class="modal-backdrop merge-modal-backdrop" id="merge-modal" hidden>
+            <section class="merge-modal" role="dialog" aria-modal="true" aria-labelledby="merge-modal-title">
+                <header class="modal-header">
+                    <div>
+                        <span class="eyebrow">Database tools</span>
+                        <div class="merge-title-row"><h2 id="merge-modal-title">MERGE DATABASES</h2><span class="beta-badge">Beta</span></div>
+                    </div>
+                    <button class="icon-button" id="btn-close-merge" type="button" aria-label="Close">&times;</button>
+                </header>
+                <nav class="merge-stepper" id="merge-stepper" aria-label="Merge progress">
+                    <span data-merge-step="source"><b>1</b> Incoming file</span>
+                    <span data-merge-step="scope"><b>2</b> Scope</span>
+                    <span data-merge-step="review"><b>3</b> Review</span>
+                    <span data-merge-step="result"><b>4</b> Results</span>
+                </nav>
+                <div class="merge-content" id="merge-content"></div>
+                <p class="merge-feedback" id="merge-feedback" role="alert" hidden></p>
+                <footer class="merge-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-merge" type="button">Cancel</button>
+                    <div>
+                        <button class="btn btn-secondary" id="btn-merge-back" type="button" hidden>Back</button>
+                        <button class="btn btn-primary" id="btn-merge-next" type="button">Choose incoming .emdb</button>
+                    </div>
+                </footer>
+            </section>
+        </div>
+
+        <div class="modal-backdrop validator-modal-backdrop" id="validator-modal" hidden>
+            <section class="validator-modal" role="alertdialog" aria-modal="true" aria-labelledby="validator-modal-title" aria-describedby="validator-modal-description">
+                <header class="modal-header">
+                    <div>
+                        <span class="eyebrow">Database validator</span>
+                        <h2 id="validator-modal-title">REVIEW DATABASE ISSUES</h2>
+                    </div>
+                    <button class="icon-button" id="btn-close-validator" type="button" aria-label="Close">&times;</button>
+                </header>
+                <div class="validator-content">
+                    <p id="validator-modal-description">Review potential duplicate entries and missing important fields before saving.</p>
+                    <div class="validator-summary" id="validator-summary"></div>
+                    <div class="validator-results" id="validator-results"></div>
+                </div>
+                <footer class="validator-actions">
+                    <p id="validator-save-note">No changes are made by the validator.</p>
+                    <div>
+                        <button class="btn btn-secondary" id="btn-dismiss-validator" type="button">Return to editor</button>
+                        <button class="btn btn-primary" id="btn-save-anyway" type="button">Save anyway</button>
+                    </div>
+                </footer>
+            </section>
+        </div>
+
         <div class="modal-backdrop compare-modal-backdrop" id="compare-modal" hidden>
             <section class="compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-modal-title">
                 <header class="modal-header">
@@ -158,6 +277,19 @@
                 <footer class="compare-actions"><button class="btn btn-secondary" id="btn-close-compare-footer" type="button">Close</button></footer>
             </section>
         </div>
+        <div class="modal-backdrop confirm-modal-backdrop compare-selection-error-backdrop" id="compare-selection-error-modal" hidden>
+            <section class="confirm-modal compare-selection-error-modal" role="alertdialog" aria-modal="true" aria-labelledby="compare-selection-error-title" aria-describedby="compare-selection-error-message">
+                <div class="confirm-modal-icon" aria-hidden="true">!</div>
+                <div class="confirm-modal-copy">
+                    <span class="eyebrow">Comparison limit</span>
+                    <h2 id="compare-selection-error-title">TOO MANY PLAYERS</h2>
+                    <p id="compare-selection-error-message">Player comparison supports up to two selected players.</p>
+                </div>
+                <div class="confirm-modal-actions">
+                    <button class="btn btn-primary" id="btn-close-compare-selection-error" type="button">Close</button>
+                </div>
+            </section>
+        </div>
         <div class="modal-backdrop guide-modal-backdrop" id="guide-modal" hidden>
             <section class="guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-modal-title">
                 <header class="modal-header">
@@ -165,59 +297,253 @@
                     <button class="icon-button" id="btn-close-guide" type="button" aria-label="Close">&times;</button>
                 </header>
                 <div class="guide-modal-content">
-                    <aside class="guide-quickstart">
-                        <h3>Quick start</h3>
-                        <ol>
-                            <li>Load a database from Library, Open .emdb, CSV folder, or the bundled default DB.</li>
-                            <li>Choose a table tab: Players, Teams, Staff, Sponsors, or Tournaments.</li>
-                            <li>Use grid cards for visual editing, or list view for spreadsheet-style scanning.</li>
-                            <li>Select a row or card, then press the edit icon to change values and assets.</li>
-                            <li>Save as .emdb or export CSVs when you are done.</li>
-                        </ol>
-                    </aside>
-                    <div class="guide-grid">
-                        <section class="guide-card">
-                            <h3>Databases</h3>
-                            <p>Use Library for bundled databases, Load Default DB for the NoScope default, Open .emdb for a local package, or Open CSV folder for loose table files.</p>
-                            <p>Save as .emdb creates a game-ready database package. Export CSVs creates a ZIP of the editable table files.</p>
+                    <div class="guide-intro">
+                        <section class="guide-quickstart">
+                            <span class="guide-section-label">Start here</span>
+                            <h3>Four steps from database to finished file</h3>
+                            <ol>
+                                <li><strong>Load</strong><span>Open your `.emdb`, choose a bundled Library database, load the default, or open a CSV folder.</span></li>
+                                <li><strong>Choose</strong><span>Open Players, Sponsors, Staff, Teams, or Tournaments and switch between card and list views.</span></li>
+                                <li><strong>Edit</strong><span>Search, filter, select an entry, and use its pencil button. Add, remove, compare, or mass edit where available.</span></li>
+                                <li><strong>Check and save</strong><span>Run Validate, review any findings, then save the game-ready `.emdb` package.</span></li>
+                            </ol>
                         </section>
-                        <section class="guide-card">
-                            <h3>Cards And Lists</h3>
-                            <p>Grid view shows visual cards. Player, staff, sponsor, and team cards can flip after hovering to reveal extra information.</p>
-                            <p>List view is for scanning. Some tables have custom view presets, such as player attribute groups, staff role attributes, and team rosters.</p>
+                        <nav class="guide-contents" aria-label="Guide sections">
+                            <span class="guide-section-label">In this guide</span>
+                            <a href="#guide-databases">Databases and saving</a>
+                            <a href="#guide-navigation">Finding and selecting entries</a>
+                            <a href="#guide-editing">Editing players and records</a>
+                            <a href="#guide-rosters">Teams and rosters</a>
+                            <a href="#guide-tools">Merge, mass edit, and validation</a>
+                            <a href="#guide-assets">Images and appearance</a>
+                        </nav>
+                    </div>
+                    <figure class="guide-screenshot">
+                        <button class="guide-screenshot-link" type="button" aria-label="Preview the Players card view screenshot">
+                            <img class="guide-screenshot-image" src="assets/guide/players-card-view.png" alt="NoScope Players card view with a database loaded">
+                        </button>
+                        <figcaption>Screenshot 1: the populated Players card view, table tabs, and editor toolbar.</figcaption>
+                    </figure>
+                    <div class="guide-sections">
+                        <section class="guide-section" id="guide-databases">
+                            <header><span>01</span><div><h3>Databases And Saving</h3><p>Load, combine, check, and export database packages.</p></div></header>
+                            <figure class="guide-screenshot">
+                                <button class="guide-screenshot-link" type="button" aria-label="Preview the database toolbar screenshot">
+                                    <img class="guide-screenshot-image" src="assets/guide/database-toolbar.png" alt="NoScope database loading, validation, merge, saving, and export toolbar">
+                                </button>
+                                <figcaption>Screenshot 2: database loading, validation, Merge Beta, saving, export, and file status controls.</figcaption>
+                            </figure>
+                            <div class="guide-section-grid">
+                                <article>
+                                    <h4>Open a database</h4>
+                                    <p><strong>Open .emdb</strong> loads a local package. <strong>Library</strong> offers bundled databases, while <strong>Load Default DB</strong> opens the NoScope default. CSV folders remain available for loose-table work.</p>
+                                </article>
+                                <article>
+                                    <h4>Save and export</h4>
+                                    <p><strong>Save as .emdb</strong> builds the encrypted game-ready package. <strong>Export CSVs</strong> creates a ZIP of the editable table files. Unsaved-change prompts appear before replacing the current database.</p>
+                                </article>
+                                <article>
+                                    <h4>Merge Beta</h4>
+                                    <p>The loaded database is always Database A. Choose Database B, select tables and player field groups, review every proposed addition or transfer, then apply only the approved changes.</p>
+                                </article>
+                                <article>
+                                    <h4>Undo a merge</h4>
+                                    <p>The last applied merge can be undone until another edit or save replaces that undo state. Merging never deletes entries from Database A automatically.</p>
+                                </article>
+                            </div>
                         </section>
-                        <section class="guide-card">
-                            <h3>Sorting And Search</h3>
-                            <p>The search box filters as you type. Sort controls change depending on the active table.</p>
-                            <p>Players sort by rating leaderboard, name, or Team ERS. Teams sort by ERS or name. Sponsors sort by tier or name. Staff sort by role-aware rating, name, or Team ERS.</p>
+                        <section class="guide-section" id="guide-navigation">
+                            <header><span>02</span><div><h3>Finding And Selecting Entries</h3><p>Move quickly through large databases without losing context.</p></div></header>
+                            <figure class="guide-screenshot">
+                                <button class="guide-screenshot-link" type="button" aria-label="Preview the Players list navigation screenshot">
+                                    <img class="guide-screenshot-image" src="assets/guide/players-list-view.png" alt="Players General list view with selection, sorting, search, filters, and view controls">
+                                </button>
+                                <figcaption>Screenshot 3: the Players General list with selection, sorting, search, filtering, comparison, and view controls.</figcaption>
+                            </figure>
+                            <div class="guide-section-grid">
+                                <article>
+                                    <h4>Cards and lists</h4>
+                                    <p>Card view is visual and includes hover-flip details. List view is designed for scanning and sorting, with focused presets for player attributes, staff roles, and team rosters.</p>
+                                </article>
+                                <article>
+                                    <h4>Search, sort, and filter</h4>
+                                    <p>Search updates as you type. Sort options change with the active table, while Filter exposes table-specific fields such as player gender, FACEIT origin, content creator status, teams, and attributes.</p>
+                                </article>
+                                <article>
+                                    <h4>Select records</h4>
+                                    <p>Click a card or list row to select it. Select multiple records for removal or player mass editing. <strong>Deselect all</strong> clears a multi-selection.</p>
+                                </article>
+                                <article>
+                                    <h4>Compare players</h4>
+                                    <p>Select one or two players before opening Compare. Two selected players are loaded directly into the comparison; selecting more than two shows a limit warning.</p>
+                                </article>
+                            </div>
                         </section>
-                        <section class="guide-card">
-                            <h3>Editing</h3>
-                            <p>The editor separates identity, skills, details, and team roster tools where applicable. Calculated ratings are refreshed automatically when relevant attributes are saved.</p>
-                            <p>Use Add to create a row, Remove to delete selected rows, and Deselect all to clear multi-selection.</p>
+                        <section class="guide-section" id="guide-editing">
+                            <header><span>03</span><div><h3>Editing Players And Records</h3><p>Use each entry's focused editor instead of modifying raw table data.</p></div></header>
+                            <figure class="guide-screenshot">
+                                <div class="guide-screenshot-pair">
+                                    <button class="guide-screenshot-link" type="button" aria-label="Preview the player Skills overview screenshot">
+                                        <img class="guide-screenshot-image" src="assets/guide/player-skills.png" alt="Player Skills tab with radar chart and world percentiles">
+                                    </button>
+                                    <button class="guide-screenshot-link" type="button" aria-label="Preview the player Potential and attribute controls screenshot">
+                                        <img class="guide-screenshot-image" src="assets/guide/player-potential.png" alt="Player Potential stars and combat, mental, and physical attribute controls">
+                                    </button>
+                                </div>
+                                <figcaption>Screenshot 4: the Skills overview and its Potential, combat, mental, and physical controls.</figcaption>
+                            </figure>
+                            <div class="guide-section-grid">
+                                <article>
+                                    <h4>Create and edit</h4>
+                                    <p>Use <strong>Add</strong> for a new entry or the pencil icon for an existing one. Player, staff, and team editors separate identity, skills, details, and roster tools into focused pages.</p>
+                                </article>
+                                <article>
+                                    <h4>Ratings and potential</h4>
+                                    <p>Player and staff ratings recalculate from relevant attributes. Enter player Potential from 1-20, or leave it blank to calculate and write an automatic value when saving. Potential is displayed as five stars without changing the current Rating.</p>
+                                </article>
+                                <article>
+                                    <h4>Unknown birthdays</h4>
+                                    <p>Clear an existing birthdate before randomizing. Enter a known age or let NoScope generate an age from 16-26. Saving a blank player birthday defaults it to age 18.</p>
+                                </article>
+                                <article>
+                                    <h4>Player badges</h4>
+                                    <p>FACEIT-origin and NoScope content creator states appear as badges on player cards and lists. Both can also be used as player filters.</p>
+                                </article>
+                            </div>
                         </section>
-                        <section class="guide-card">
-                            <h3>Teams And Rosters</h3>
-                            <p>Team editor roster view lets you drag players to reorder main squad and bench. The first five assigned players are treated as main squad; remaining players are bench.</p>
-                            <p>Team list roster view and flipped team cards use the same roster matching logic.</p>
+                        <section class="guide-section" id="guide-rosters">
+                            <header><span>04</span><div><h3>Teams And Rosters</h3><p>Build the main squad and bench from inside the team editor.</p></div></header>
+                            <figure class="guide-screenshot">
+                                <button class="guide-screenshot-link" type="button" aria-label="Preview the team roster editor screenshot">
+                                    <img class="guide-screenshot-image" src="assets/guide/team-roster-editor.png" alt="Team roster editor with main squad, bench, and player search">
+                                </button>
+                                <figcaption>Screenshot 5: the team Roster page with main squad, bench, and player search.</figcaption>
+                            </figure>
+                            <div class="guide-section-grid">
+                                <article>
+                                    <h4>Add players</h4>
+                                    <p>Search the database from the Roster page and add matching players. <strong>Create Player</strong> opens the regular player editor and returns the new player to the roster workflow.</p>
+                                </article>
+                                <article>
+                                    <h4>Main squad and bench</h4>
+                                    <p>Drag players to reorder them or drop them directly into the Main squad or Bench area. The selected destination is saved even when fewer than five main players exist.</p>
+                                </article>
+                                <article>
+                                    <h4>Roster state</h4>
+                                    <p>Team membership is written back to player Team, Team ID, and Roster Position fields when those columns exist. Team cards and roster list view use the same saved state.</p>
+                                </article>
+                                <article>
+                                    <h4>Tournament locations</h4>
+                                    <p>Tournaments use eligible country and city combinations. The editor displays a fixed map preview for the selected location and rejects unsupported pairs.</p>
+                                </article>
+                            </div>
                         </section>
-                        <section class="guide-card">
-                            <h3>Images And Assets</h3>
-                            <p>Images are matched by stable identifiers such as internal ID, nickname, name, or team ID. Use the asset editor inside an entry to choose or remove a local image override.</p>
-                            <p>The Assets button opens the CustomAssets Google Drive folder for shared image files.</p>
+                        <section class="guide-section" id="guide-tools">
+                            <header><span>05</span><div><h3>Mass Editing And Validation</h3><p>Use the bulk tools deliberately and review their output.</p></div></header>
+                            <div class="guide-screenshot-grid guide-screenshot-grid-three">
+                                <figure class="guide-screenshot">
+                                    <button class="guide-screenshot-link" type="button" aria-label="Preview the Mass Edit Beta screenshot">
+                                        <img class="guide-screenshot-image" src="assets/guide/mass-edit-beta.png" alt="Mass Edit Beta attribute and range controls for five selected players">
+                                    </button>
+                                    <figcaption>Screenshot 6: Mass Edit Beta attribute selection, tier presets, and random ranges.</figcaption>
+                                </figure>
+                                <figure class="guide-screenshot">
+                                    <button class="guide-screenshot-link" type="button" aria-label="Preview the Merge Beta review screenshot">
+                                        <img class="guide-screenshot-image" src="assets/guide/merge-review-beta.png" alt="Merge Beta review with update, transfer, and renamed player proposals">
+                                    </button>
+                                    <figcaption>Screenshot 7: Merge Beta review with proposal counts, transfers, updates, and rename visibility.</figcaption>
+                                </figure>
+                                <figure class="guide-screenshot">
+                                    <button class="guide-screenshot-link" type="button" aria-label="Preview the database validator screenshot">
+                                        <img class="guide-screenshot-image" src="assets/guide/validator-results.png" alt="Database Validator showing duplicate groups and missing values">
+                                    </button>
+                                    <figcaption>Screenshot 8: grouped Validator findings for duplicate entries and missing important values.</figcaption>
+                                </figure>
+                            </div>
+                            <div class="guide-section-grid">
+                                <article>
+                                    <h4>Mass Edit Beta</h4>
+                                    <p>Select at least two players, then choose fixed values or random ranges for the fields you want to change. Unchecked fields remain untouched and ratings recalculate after applying.</p>
+                                </article>
+                                <article>
+                                    <h4>Quick ranges</h4>
+                                    <p>Tier presets assign common attribute ranges. Section controls select or clear related fields, while Reset restores the standard 1-20 ranges before applying.</p>
+                                </article>
+                                <article>
+                                    <h4>Validate</h4>
+                                    <p>The standalone Validate button checks duplicate identifiers and names plus missing important fields across all five database tables. Clean checks stay out of the way.</p>
+                                </article>
+                                <article>
+                                    <h4>Pre-save review</h4>
+                                    <p>Validation runs automatically before `.emdb` saving. Findings are grouped by table with entry samples. Return to the editor to fix them or choose <strong>Save anyway</strong> for intentional legacy data.</p>
+                                </article>
+                            </div>
                         </section>
-                        <section class="guide-card">
-                            <h3>Filters And Compare</h3>
-                            <p>Filter opens table-specific filters for narrowing the current table. Compare appears for Players and lets you inspect two player profiles side by side.</p>
-                        </section>
-                        <section class="guide-card">
-                            <h3>Localhost Note</h3>
-                            <p>Some browser security rules block bundled database loading from a direct file path. If Library cannot read databases, open the app through localhost.</p>
+                        <section class="guide-section" id="guide-assets">
+                            <header><span>06</span><div><h3>Images And Appearance</h3><p>Control entry images and switch the editor theme.</p></div></header>
+                            <div class="guide-screenshot-grid">
+                                <figure class="guide-screenshot">
+                                    <button class="guide-screenshot-link" type="button" aria-label="Preview the player image editor screenshot">
+                                        <img class="guide-screenshot-image" src="assets/guide/image-asset-editor.png" alt="Player photo preview with Choose image and Remove controls">
+                                    </button>
+                                    <figcaption>Screenshot 9: a player photo preview with local Choose image and Remove controls.</figcaption>
+                                </figure>
+                                <figure class="guide-screenshot">
+                                    <button class="guide-screenshot-link" type="button" aria-label="Preview the NoScope light mode screenshot">
+                                        <img class="guide-screenshot-image" src="assets/guide/light-theme-player-cards.png" alt="Populated NoScope Players card view in light mode">
+                                    </button>
+                                    <figcaption>Screenshot 10: the populated Players card view in light mode with the theme control visible.</figcaption>
+                                </figure>
+                            </div>
+                            <div class="guide-section-grid">
+                                <article>
+                                    <h4>Automatic image matching</h4>
+                                    <p>Bundled images are matched using stable IDs, nicknames, names, and team identifiers. Use consistent entry names and IDs when adding records so their available images resolve correctly.</p>
+                                </article>
+                                <article>
+                                    <h4>Local image overrides</h4>
+                                    <p>Open an entry with its pencil button and use the image area to choose or remove a local override. The preview shows which image will be associated with that entry in NoScope.</p>
+                                </article>
+                                <article>
+                                    <h4>Assets library</h4>
+                                    <p>Open <strong>Assets</strong> from the header to access the shared CustomAssets collection for players, staff, sponsors, teams, and tournaments.</p>
+                                </article>
+                                <article>
+                                    <h4>Light and dark mode</h4>
+                                    <p>Dark mode is the startup default. Use the moon or sun button beside Assets to switch the current session between dark and light themes.</p>
+                                </article>
+                            </div>
                         </section>
                     </div>
                 </div>
                 <footer class="guide-modal-actions">
                     <button class="btn btn-secondary" id="btn-close-guide-footer" type="button">Close</button>
+                </footer>
+            </section>
+        </div>
+        <div class="modal-backdrop guide-image-modal-backdrop" id="guide-image-modal" hidden>
+            <section class="guide-image-modal" role="dialog" aria-modal="true" aria-labelledby="guide-image-modal-title" aria-describedby="guide-image-preview-caption">
+                <header class="modal-header">
+                    <div><span class="eyebrow">Guide image</span><h2 id="guide-image-modal-title">SCREENSHOT PREVIEW</h2></div>
+                    <button class="icon-button" id="btn-close-guide-image" type="button" aria-label="Close screenshot preview">&times;</button>
+                </header>
+                <div class="guide-image-preview-content">
+                    <img id="guide-image-preview" alt="">
+                    <p id="guide-image-preview-caption"></p>
+                </div>
+            </section>
+        </div>
+        <div class="modal-backdrop changelog-modal-backdrop" id="changelog-modal" hidden>
+            <section class="changelog-modal" role="dialog" aria-modal="true" aria-labelledby="changelog-modal-title">
+                <header class="modal-header">
+                    <div><span class="eyebrow">NoScope changelog</span><h2 id="changelog-modal-title">RELEASE ARCHIVE</h2></div>
+                    <button class="icon-button" id="btn-close-changelog" type="button" aria-label="Close changelog">&times;</button>
+                </header>
+                <div class="changelog-modal-content" id="changelog-modal-content" aria-live="polite">
+                    <div class="changelog-loading">Loading changelog...</div>
+                </div>
+                <footer class="changelog-modal-actions">
+                    <button class="btn btn-secondary" id="btn-close-changelog-footer" type="button">Close</button>
                 </footer>
             </section>
         </div>
@@ -262,6 +588,20 @@
                 <div class="confirm-modal-actions">
                     <button class="btn btn-secondary" id="btn-cancel-confirm" type="button">Cancel</button>
                     <button class="btn btn-danger" id="btn-accept-confirm" type="button">Remove</button>
+                </div>
+            </section>
+        </div>
+        <div class="modal-backdrop confirm-modal-backdrop leave-modal-backdrop" id="leave-modal" hidden>
+            <section class="confirm-modal leave-modal" role="alertdialog" aria-modal="true" aria-labelledby="leave-modal-title" aria-describedby="leave-modal-message">
+                <div class="confirm-modal-icon" aria-hidden="true">!</div>
+                <div class="confirm-modal-copy">
+                    <span class="eyebrow">Unsaved changes</span>
+                    <h2 id="leave-modal-title">SAVE CHANGES?</h2>
+                    <p id="leave-modal-message">You have unsaved database changes. Save before leaving this database?</p>
+                </div>
+                <div class="confirm-modal-actions leave-modal-actions">
+                    <button class="btn btn-primary" id="btn-save-before-leave" type="button">SAVE</button>
+                    <button class="btn btn-danger" id="btn-exit-without-saving" type="button">EXIT</button>
                 </div>
             </section>
         </div>
@@ -312,8 +652,10 @@
         </div>
     </div>
 
-    <script src="js/asset-manifest.js"></script>
-    <script src="js/asset-db.js"></script>
-    <script src="js/script.js"></script>
+    <script src="js/generated/asset-manifest.js"></script>
+    <script src="js/services/asset-db.js"></script>
+    <script src="js/features/validator.js"></script>
+    <script src="js/features/merge.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
