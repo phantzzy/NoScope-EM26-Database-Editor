@@ -121,6 +121,29 @@ const teamListViewPresets = {
     general: { label: "General" },
     roster: { label: "Roster" }
 };
+const TEAM_MAP_OPTIONS = Object.freeze([
+    { value: "ancient", label: "Ancient" },
+    { value: "dust", label: "Dust" },
+    { value: "inferno", label: "Inferno" },
+    { value: "mirage", label: "Mirage" },
+    { value: "nuke", label: "Nuke" },
+    { value: "overpass", label: "Overpass" },
+    { value: "train", label: "Train" }
+]);
+const TEAM_IDENTITY_FIELD_NAMES = new Set([
+    "ers",
+    "academy",
+    "bgcolor",
+    "bgcolour",
+    "backgroundcolor",
+    "backgroundcolour",
+    "startigl",
+    "startingigl",
+    "igl",
+    "fpmap",
+    "fbmap",
+    "disbanded"
+]);
 const listViewStates = {
     players: "general",
     teams: "general",
@@ -1988,6 +2011,23 @@ function getSerializableTableRows(tableName, table) {
         serializedRow[potentialField.index] = String(resolved.value);
         return serializedRow;
     });
+}
+
+function normalizeTeamDraftForSave(table) {
+    const mapFields = table.header
+        .map((label, index) => ({ index, name: normalizeFieldName(label), label }))
+        .filter(field => ["fpmap", "fbmap"].includes(field.name));
+    for (const field of mapFields) {
+        const value = String(editDraft[field.index] ?? "").trim();
+        if (!value) continue;
+        const normalizedValue = normalizeTeamMapValue(value);
+        if (!normalizedValue) {
+            alert(`${field.label} must be one of: ${TEAM_MAP_OPTIONS.map(option => option.label).join(", ")}.`);
+            return false;
+        }
+        editDraft[field.index] = normalizedValue;
+    }
+    return true;
 }
 
 function formatPotentialValue(value) {
@@ -3863,6 +3903,12 @@ function getFieldSection(label) {
     return "details";
 }
 
+function getEditorFieldSection(label, isTeamEditor = false) {
+    const name = normalizeFieldName(label);
+    if (isTeamEditor && TEAM_IDENTITY_FIELD_NAMES.has(name)) return "general";
+    return getFieldSection(label);
+}
+
 function captureVisibleFields() {
     editFormFields.querySelectorAll("[data-column]").forEach(input => {
         editDraft[Number(input.dataset.column)] = input.value;
@@ -4022,9 +4068,16 @@ function renderEditorFields() {
     }
     editFormFields.className = "form-grid";
     const targetSection = editorPage === "stats" ? statsPage : editorPage;
-    const fieldOrder = ["nickname", "nick", "name", "firstname", "forename", "surname", "lastname", "dateofbirth", "birthdate", "dob", "nationality", "country", "gender", "team", "teamid", "rosterposition", "role", "role1", "role2", "role3", "earnings", "pr", "rating", "status"];
+    const fieldOrder = [
+        "nickname", "nick", "name", "firstname", "forename", "surname", "lastname",
+        "dateofbirth", "birthdate", "dob", "nationality", "country", "gender",
+        "team", "teamid", "rosterposition", "role", "role1", "role2", "role3",
+        "earnings", "pr", "rating", "ers", "academy", "bgcolor", "bgcolour",
+        "backgroundcolor", "backgroundcolour", "startigl", "startingigl", "igl",
+        "fpmap", "fbmap", "status", "disbanded"
+    ];
     const visibleFields = table.header.map((label, index) => ({ label, index }))
-        .filter(field => !isTabbedEditor || getFieldSection(field.label) === targetSection)
+        .filter(field => !isTabbedEditor || getEditorFieldSection(field.label, isTeamEditor) === targetSection)
         .filter(field => !(isPlayerEditor && normalizeFieldName(field.label) === "faceit"))
         .filter(field => !["createdby", "createdat"].includes(normalizeFieldName(field.label)));
     if (isTabbedEditor && targetSection === "general") {
@@ -4048,6 +4101,14 @@ function renderEditorFields() {
         }
         if (normalizedLabel === "gender") {
             editFormFields.appendChild(createGenderField(label, index));
+            return;
+        }
+        if (isTeamEditor && normalizedLabel === "academy") {
+            editFormFields.appendChild(createTeamPickerField(label, index));
+            return;
+        }
+        if (isTeamEditor && ["startigl", "startingigl", "igl"].includes(normalizedLabel)) {
+            editFormFields.appendChild(createTeamStartIglField(label, index));
             return;
         }
         if (normalizedLabel === "disbanded") {
@@ -4076,6 +4137,10 @@ function renderEditorFields() {
         }
         if (activeTab.toLowerCase() === "teams" && ["bgcolor", "bgcolour", "backgroundcolor", "backgroundcolour"].includes(normalizedLabel)) {
             editFormFields.appendChild(createColorPickerField(label, index));
+            return;
+        }
+        if (activeTab.toLowerCase() === "teams" && ["fpmap", "fbmap"].includes(normalizedLabel)) {
+            editFormFields.appendChild(createTeamMapField(label, index));
             return;
         }
         if (["team", "teamid"].includes(normalizedLabel)) {
@@ -4352,6 +4417,37 @@ function createFixedSelectField(label, index, choices, className = "") {
     return field;
 }
 
+function normalizeTeamMapValue(value) {
+    const normalizedValue = normalizeFieldName(value);
+    const match = TEAM_MAP_OPTIONS.find(option => normalizeFieldName(option.value) === normalizedValue || normalizeFieldName(option.label) === normalizedValue);
+    return match?.value || "";
+}
+
+function createTeamMapField(label, index, className = "") {
+    const field = document.createElement("label");
+    field.className = `form-field field-${normalizeFieldName(label)} fixed-select-field team-map-field ${className}`.trim();
+    const caption = document.createElement("span");
+    caption.textContent = label || "Map";
+    const select = document.createElement("select");
+    select.dataset.column = index;
+
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "No map";
+    select.appendChild(emptyOption);
+    TEAM_MAP_OPTIONS.forEach(option => {
+        const item = document.createElement("option");
+        item.value = option.value;
+        item.textContent = option.label;
+        select.appendChild(item);
+    });
+
+    const currentValue = String(editDraft[index] ?? "").trim();
+    select.value = currentValue ? normalizeTeamMapValue(currentValue) : "";
+    field.append(caption, select);
+    return field;
+}
+
 function createGenderField(label, index, className = "") {
     const field = document.createElement("div");
     field.className = `form-field field-gender gender-field ${className}`.trim();
@@ -4421,13 +4517,37 @@ function createColorPickerField(label, index, className = "") {
     field.className = `form-field color-picker-field field-${normalizeFieldName(label)} ${className}`.trim();
     const caption = document.createElement("span");
     caption.textContent = label;
-    const input = document.createElement("input");
-    input.type = "color";
-    input.dataset.column = index;
+    const controls = document.createElement("div");
+    controls.className = "color-picker-control";
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    const hexInput = document.createElement("input");
+    hexInput.type = "text";
+    hexInput.dataset.column = index;
+    hexInput.inputMode = "text";
+    hexInput.spellcheck = false;
     const currentValue = String(editDraft[index] ?? "").trim();
     const hexValue = currentValue.match(/^#?([0-9a-f]{6})$/i);
-    input.value = hexValue ? `#${hexValue[1]}` : "#202328";
-    field.append(caption, input);
+    const initialValue = hexValue ? `#${hexValue[1]}`.toLowerCase() : "#202328";
+    colorInput.value = initialValue;
+    hexInput.value = initialValue;
+    colorInput.addEventListener("input", () => {
+        hexInput.value = colorInput.value.toLowerCase();
+    });
+    hexInput.addEventListener("input", () => {
+        const match = hexInput.value.trim().match(/^#?([0-9a-f]{6})$/i);
+        if (match) {
+            const value = `#${match[1]}`.toLowerCase();
+            colorInput.value = value;
+            hexInput.value = value;
+        }
+    });
+    hexInput.addEventListener("blur", () => {
+        const match = hexInput.value.trim().match(/^#?([0-9a-f]{6})$/i);
+        hexInput.value = match ? `#${match[1]}`.toLowerCase() : colorInput.value.toLowerCase();
+    });
+    controls.append(colorInput, hexInput);
+    field.append(caption, controls);
     return field;
 }
 
@@ -4523,6 +4643,45 @@ function createTeamPickerField(label, index, className = "") {
         return { value: targetIsId ? teamId : teamName, label: teamName || teamId, image: getBundledAssetCandidates(teamsTableName, row)[0] || "" };
     }).filter(option => option.label) : [];
     return createSearchablePickerField(label, index, options, `team-picker ${className}`);
+}
+
+function createTeamStartIglField(label, index, className = "") {
+    const playersTableName = Object.keys(db.tables).find(name => name.toLowerCase() === "players");
+    const playersTable = playersTableName ? db.tables[playersTableName] : null;
+    const currentValue = String(editDraft[index] ?? "").trim();
+    if (!playersTable) return createBoundField(label, index, { className });
+
+    const aliases = new Set(getTeamAliases(editDraft));
+    const teamColumns = playersTable.header
+        .map((header, columnIndex) => ({ name: normalizeFieldName(header), index: columnIndex }))
+        .filter(field => ["team", "teamname", "teamid"].includes(field.name));
+    const assignedIndexes = new Set(teamRosterDraft.filter(Number.isInteger));
+    playersTable.rows.forEach((row, rowIndex) => {
+        if (teamColumns.some(field => aliases.has(String(row[field.index] || "").trim().normalize("NFKC").toLowerCase()))) {
+            assignedIndexes.add(rowIndex);
+        }
+    });
+
+    const options = [...assignedIndexes]
+        .filter(rowIndex => playersTable.rows[rowIndex])
+        .map(rowIndex => {
+            const row = playersTable.rows[rowIndex];
+            const nick = getTableValue(playersTable, row, ["nick", "nickname", "id"]) || `Player ${rowIndex + 1}`;
+            const fullName = [getTableValue(playersTable, row, ["name", "firstname", "forename"]), getTableValue(playersTable, row, ["surname", "lastname"])]
+                .filter(Boolean)
+                .join(" ");
+            return {
+                value: nick,
+                label: fullName ? `${nick} - ${fullName}` : nick,
+                image: getBundledAssetCandidates(playersTableName, row)[0] || ""
+            };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+    if (currentValue && !options.some(option => option.value.toLowerCase() === currentValue.toLowerCase())) {
+        options.unshift({ value: currentValue, label: currentValue, image: "" });
+    }
+    return createSearchablePickerField(label, index, options, `player-picker start-igl-picker ${className}`);
 }
 
 const COUNTRY_FLAG_ALIASES = Object.freeze({
@@ -4874,11 +5033,12 @@ function renderStaffInfoEditor(table) {
 
 function renderDetailsEditor(table) {
     const isPlayerEditor = activeTab.toLowerCase() === "players";
+    const isTeamEditor = activeTab.toLowerCase() === "teams";
     editFormFields.className = "details-editor-content";
     editFormFields.innerHTML = "";
     const hiddenMetadataFields = new Set(["createdby", "createdat"]);
     const details = table.header.map((label, index) => ({ label, index }))
-        .filter(field => getFieldSection(field.label) === "details" && !hiddenMetadataFields.has(normalizeFieldName(field.label)));
+        .filter(field => getEditorFieldSection(field.label, isTeamEditor) === "details" && !hiddenMetadataFields.has(normalizeFieldName(field.label)));
     const biography = details.find(field => /bio|biography|description|about/i.test(field.label));
     const photoUrl = details.find(field => /photo.*url|image.*url|portrait.*url/i.test(field.label));
     const internalId = details.find(field => /internal.*id/i.test(field.label));
@@ -6700,6 +6860,7 @@ editForm.addEventListener("submit", async event => {
     if (editingRowIndex < 0) return;
     captureVisibleFields();
     if (activeTab.toLowerCase() === "tournaments" && !validateTournamentEligibilityDraft(db.tables[activeTab])) return;
+    if (activeTab.toLowerCase() === "teams" && !normalizeTeamDraftForSave(db.tables[activeTab])) return;
     if (activeTab.toLowerCase() === "players") {
         ensurePlayerDateOfBirth(db.tables[activeTab]);
         const ratingIndex = db.tables[activeTab].header.findIndex(label => ["rating", "overall", "overallrating"].includes(normalizeFieldName(label)));

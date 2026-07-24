@@ -5,6 +5,9 @@ const DATABASE_VALIDATION_RULES = {
             { label: "Internal ID", aliases: ["internalid", "playerid", "id"] },
             { label: "Nickname", aliases: ["nickname", "nick"] }
         ],
+        compositeDuplicates: [
+            { label: "Full name", aliases: [["name", "firstname", "forename"], ["surname", "lastname"]] }
+        ],
         required: [
             { label: "Nickname", aliases: ["nickname", "nick"] },
             { label: "Date of birth", aliases: ["dateofbirth", "birthdate", "dob"] },
@@ -19,6 +22,9 @@ const DATABASE_VALIDATION_RULES = {
         duplicates: [
             { label: "Internal ID", aliases: ["internalid", "staffid", "id"] },
             { label: "Nickname", aliases: ["nickname", "nick"] }
+        ],
+        compositeDuplicates: [
+            { label: "Full name", aliases: [["name", "firstname", "forename"], ["surname", "lastname"]] }
         ],
         required: [
             { label: "Nickname", aliases: ["nickname", "nick"] },
@@ -38,7 +44,8 @@ const DATABASE_VALIDATION_RULES = {
         required: [
             { label: "Nickname", aliases: ["nick", "nickname"] },
             { label: "Name", aliases: ["name", "teamname"] },
-            { label: "Country", aliases: ["country", "nationality"] }
+            { label: "Country", aliases: ["country", "nationality"] },
+            { label: "Rating", aliases: ["rating"] }
         ]
     },
     Tournaments: {
@@ -101,11 +108,7 @@ function getValidationColumnIndex(table, aliases) {
 }
 
 function normalizeValidationValue(value) {
-    return String(value ?? "")
-        .normalize("NFKC")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
+    return String(value ?? "").trim();
 }
 
 function getValidationEntryLabel(table, row, aliases, rowIndex) {
@@ -116,7 +119,7 @@ function getValidationEntryLabel(table, row, aliases, rowIndex) {
 
 function collectDuplicateValidationIssues(tableName, table, rules) {
     const issues = [];
-    rules.duplicates.forEach(rule => {
+    (rules.duplicates || []).forEach(rule => {
         const columnIndex = getValidationColumnIndex(table, rule.aliases);
         if (columnIndex < 0) return;
         const groups = new Map();
@@ -125,6 +128,37 @@ function collectDuplicateValidationIssues(tableName, table, rules) {
             const value = normalizeValidationValue(rawValue);
             if (!value) return;
             if (!groups.has(value)) groups.set(value, { value: rawValue, rows: [] });
+            groups.get(value).rows.push(rowIndex);
+        });
+        groups.forEach(group => {
+            if (group.rows.length < 2) return;
+            issues.push({
+                type: "duplicate",
+                tableName,
+                fieldLabel: rule.label,
+                value: group.value,
+                count: group.rows.length,
+                entries: group.rows.map(rowIndex => ({
+                    rowIndex,
+                    label: getValidationEntryLabel(table, table.rows[rowIndex], rules.labelAliases, rowIndex)
+                }))
+            });
+        });
+    });
+    return issues;
+}
+
+function collectCompositeDuplicateValidationIssues(tableName, table, rules) {
+    const issues = [];
+    (rules.compositeDuplicates || []).forEach(rule => {
+        const columns = rule.aliases.map(aliasGroup => getValidationColumnIndex(table, aliasGroup));
+        if (columns.some(index => index < 0)) return;
+        const groups = new Map();
+        table.rows.forEach((row, rowIndex) => {
+            const parts = columns.map(index => normalizeValidationValue(row[index]));
+            if (parts.some(part => !part)) return;
+            const value = parts.join(" ");
+            if (!groups.has(value)) groups.set(value, { value, rows: [] });
             groups.get(value).rows.push(rowIndex);
         });
         groups.forEach(group => {
@@ -179,6 +213,126 @@ function collectMissingValidationIssues(tableName, table, rules) {
     return issues;
 }
 
+function collectInvalidTeamMapValidationIssues(tableName, table, rules) {
+    const issues = [];
+    table.header
+        .map((label, index) => ({ label, index, name: normalizeFieldName(label) }))
+        .filter(field => ["fpmap", "fbmap"].includes(field.name))
+        .forEach(field => {
+            const entries = [];
+            table.rows.forEach((row, rowIndex) => {
+                const value = String(row[field.index] ?? "").trim();
+                if (!value || normalizeTeamMapValue(value)) return;
+                entries.push({
+                    rowIndex,
+                    label: getValidationEntryLabel(table, row, rules.labelAliases, rowIndex),
+                    value
+                });
+            });
+            if (!entries.length) return;
+            issues.push({
+                type: "invalid-value",
+                tableName,
+                fieldLabel: field.label,
+                value: entries[0].value,
+                count: entries.length,
+                entries
+            });
+        });
+    return issues;
+}
+
+function isValidationFreeAgentValue(value) {
+    return /^(free\s*agent|freeagent|fa|none|no team|unsigned)$/i.test(String(value || "").trim());
+}
+
+function collectMissingPlayerTeamValidationIssues(tableName, table, rules) {
+    const teamsTableName = getValidationTableName("Teams");
+    const teamsTable = teamsTableName ? db.tables[teamsTableName] : null;
+    if (!teamsTable) return [];
+
+    const teamReferenceIndex = getValidationColumnIndex(table, ["team", "teamname", "teamid"]);
+    if (teamReferenceIndex < 0) return [];
+
+    const validTeams = new Set();
+    teamsTable.header
+        .map((label, index) => ({ index, name: normalizeFieldName(label) }))
+        .filter(field => ["nick", "nickname", "name", "teamname", "teamid", "internalid", "id"].includes(field.name))
+        .forEach(field => {
+            teamsTable.rows.forEach(row => {
+                const value = normalizeValidationValue(row[field.index]);
+                if (value) validTeams.add(value);
+            });
+        });
+
+    const entries = [];
+    table.rows.forEach((row, rowIndex) => {
+        const value = normalizeValidationValue(row[teamReferenceIndex]);
+        if (!value || isValidationFreeAgentValue(value) || validTeams.has(value)) return;
+        entries.push({
+            rowIndex,
+            label: getValidationEntryLabel(table, row, rules.labelAliases, rowIndex),
+            value
+        });
+    });
+    if (!entries.length) return [];
+    return [{
+        type: "invalid-reference",
+        tableName,
+        fieldLabel: "Team",
+        count: entries.length,
+        entries
+    }];
+}
+
+function getValidationFullName(table, row) {
+    const firstName = getTableValue(table, row, ["name", "firstname", "forename"]);
+    const surname = getTableValue(table, row, ["surname", "lastname"]);
+    if (!firstName || !surname) return "";
+    return `${firstName} ${surname}`;
+}
+
+function collectPlayerStaffDuplicateValidationIssues() {
+    const playersTableName = getValidationTableName("Players");
+    const staffTableName = getValidationTableName("Staff");
+    const playersTable = playersTableName ? db.tables[playersTableName] : null;
+    const staffTable = staffTableName ? db.tables[staffTableName] : null;
+    if (!playersTable || !staffTable) return [];
+
+    const staffByFullName = new Map();
+    staffTable.rows.forEach((row, rowIndex) => {
+        const fullName = getValidationFullName(staffTable, row);
+        if (!fullName) return;
+        if (!staffByFullName.has(fullName)) staffByFullName.set(fullName, []);
+        staffByFullName.get(fullName).push({
+            rowIndex,
+            label: getValidationEntryLabel(staffTable, row, DATABASE_VALIDATION_RULES.Staff.labelAliases, rowIndex)
+        });
+    });
+
+    const matchesByFullName = new Map();
+    playersTable.rows.forEach((row, rowIndex) => {
+        const fullName = getValidationFullName(playersTable, row);
+        if (!fullName || !staffByFullName.has(fullName)) return;
+        if (!matchesByFullName.has(fullName)) matchesByFullName.set(fullName, []);
+        staffByFullName.get(fullName).forEach(staffEntry => {
+            matchesByFullName.get(fullName).push({
+                rowIndex,
+                label: getValidationEntryLabel(playersTable, row, DATABASE_VALIDATION_RULES.Players.labelAliases, rowIndex),
+                value: `${fullName} matches staff ${staffEntry.label} (#${staffEntry.rowIndex + 1})`
+            });
+        });
+    });
+    return [...matchesByFullName.entries()].map(([fullName, entries]) => ({
+        type: "duplicate",
+        tableName: `${playersTableName} / ${staffTableName}`,
+        fieldLabel: "Player/staff full name",
+        value: fullName,
+        count: entries.length,
+        entries
+    }));
+}
+
 function validateCurrentDatabase() {
     const issues = [];
     Object.entries(DATABASE_VALIDATION_RULES).forEach(([requestedName, rules]) => {
@@ -195,16 +349,23 @@ function validateCurrentDatabase() {
         }
         const table = db.tables[tableName];
         issues.push(...collectDuplicateValidationIssues(tableName, table, rules));
+        issues.push(...collectCompositeDuplicateValidationIssues(tableName, table, rules));
         issues.push(...collectMissingValidationIssues(tableName, table, rules));
+        if (requestedName === "Teams") issues.push(...collectInvalidTeamMapValidationIssues(tableName, table, rules));
+        if (requestedName === "Players") issues.push(...collectMissingPlayerTeamValidationIssues(tableName, table, rules));
     });
+    issues.push(...collectPlayerStaffDuplicateValidationIssues());
     const duplicateIssues = issues.filter(issue => issue.type === "duplicate");
-    const missingIssues = issues.filter(issue => issue.type !== "duplicate");
+    const missingIssues = issues.filter(issue => ["missing-column", "missing-table", "missing-value"].includes(issue.type));
+    const invalidIssues = issues.filter(issue => ["invalid-value", "invalid-reference"].includes(issue.type));
     return {
         issues,
         duplicateIssues,
         missingIssues,
+        invalidIssues,
         duplicateEntryCount: duplicateIssues.reduce((total, issue) => total + issue.count, 0),
         missingValueCount: missingIssues.reduce((total, issue) => total + issue.count, 0),
+        invalidValueCount: invalidIssues.reduce((total, issue) => total + issue.count, 0),
         affectedTables: new Set(issues.map(issue => issue.tableName)).size,
         hasIssues: issues.length > 0
     };
@@ -231,6 +392,12 @@ function getValidatorIssueMessage(issue) {
     if (issue.type === "missing-table") {
         return `The ${issue.tableName} table is missing from this database.`;
     }
+    if (issue.type === "invalid-value") {
+        return `${issue.count} ${issue.count === 1 ? "entry has" : "entries have"} an invalid ${issue.fieldLabel} value.`;
+    }
+    if (issue.type === "invalid-reference") {
+        return `${issue.count} ${issue.count === 1 ? "player is" : "players are"} assigned to a non-existent team.`;
+    }
     return `${issue.count} ${issue.count === 1 ? "entry is" : "entries are"} missing ${issue.fieldLabel}.`;
 }
 
@@ -239,21 +406,31 @@ function createValidatorIssueRow(issue) {
     item.className = `validator-issue validator-issue-${issue.type}`;
     const badge = document.createElement("span");
     badge.className = "validator-issue-badge";
-    badge.textContent = issue.type === "duplicate" ? "Duplicate" : "Missing";
+    badge.textContent = issue.type === "duplicate"
+        ? "Duplicate"
+        : ["invalid-value", "invalid-reference"].includes(issue.type)
+            ? "Invalid"
+            : "Missing";
     const body = document.createElement("div");
     const message = document.createElement("strong");
     message.textContent = getValidatorIssueMessage(issue);
     const meta = document.createElement("small");
     meta.textContent = issue.type === "duplicate"
         ? `${issue.fieldLabel} should normally identify one entry.`
-        : "This field is important for identifying or using the entry in-game.";
+        : issue.type === "invalid-reference"
+            ? "Player team values must exactly match an existing team nickname or name."
+            : issue.type === "invalid-value"
+            ? "This value must match one of the game's supported raw values."
+            : "This field is important for identifying or using the entry in-game.";
     body.append(message, meta);
     if (issue.entries.length) {
         const entries = document.createElement("div");
         entries.className = "validator-entry-samples";
         issue.entries.slice(0, VALIDATOR_ENTRY_SAMPLE_LIMIT).forEach(entry => {
             const sample = document.createElement("span");
-            sample.textContent = `${entry.label} (#${entry.rowIndex + 1})`;
+            sample.textContent = entry.value
+                ? `${entry.label} -> ${entry.value} (#${entry.rowIndex + 1})`
+                : `${entry.label} (#${entry.rowIndex + 1})`;
             entries.appendChild(sample);
         });
         if (issue.entries.length > VALIDATOR_ENTRY_SAMPLE_LIMIT) {
@@ -272,6 +449,7 @@ function renderValidatorResults(result) {
     validatorSummary.replaceChildren(
         createValidatorSummaryItem(result.duplicateIssues.length, "duplicate groups", "is-duplicate"),
         createValidatorSummaryItem(result.missingValueCount, "missing values", "is-missing"),
+        createValidatorSummaryItem(result.invalidValueCount, "invalid values", "is-invalid"),
         createValidatorSummaryItem(result.affectedTables, "tables affected")
     );
     validatorResults.innerHTML = "";
