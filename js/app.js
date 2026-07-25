@@ -332,6 +332,8 @@ let contentCreatorDraft = false;
 let currentContentCreatorKey = null;
 let teamRosterPlayerCreateContext = null;
 let playerBirthAgeDraft = "";
+let playerFaceitSkillPresetOpen = false;
+let playerFaceitSkillPreset = "base";
 let hasUnsavedChanges = false;
 let savedDatabaseState = null;
 let dirtyBeforeNewRow = false;
@@ -352,6 +354,11 @@ const SEARCH_RENDER_DELAY_MS = 120;
 const TEAM_ROSTER_FLIP_DELAY_MS = 1000;
 const PLAYER_RANDOM_AGE_MIN = 16;
 const PLAYER_RANDOM_AGE_MAX = 26;
+const PLAYER_FACEIT_ELO_PRESETS = [
+    { value: "base", label: "Base Level 10", detail: "2,001 to ~2,400 ELO", min: 7, max: 11 },
+    { value: "high", label: "High Level 10", detail: "2,400 to 3,000 ELO", min: 9, max: 13 },
+    { value: "elite", label: "Elite Level 10", detail: "3,000+ ELO", min: 11, max: 15 }
+];
 const desktopBridge = window.noscopeDesktop || null;
 const capabilities = {
     desktop: Boolean(desktopBridge),
@@ -517,11 +524,23 @@ let activeGuideImageTrigger = null;
 let latestUpdateInfo = null;
 let updateBusy = false;
 
+function updateUpdateButtonVisibility() {
+    if (!btnUpdate) return;
+    const showUpdateButton = Boolean(capabilities.updater && latestUpdateInfo?.hasUpdate && latestUpdateInfo?.canInstall);
+    btnUpdate.hidden = !showUpdateButton;
+    btnUpdate.title = showUpdateButton ? `Install NoScope v${latestUpdateInfo.latestVersion}` : "";
+    btnUpdate.setAttribute(
+        "aria-label",
+        showUpdateButton ? `Install NoScope v${latestUpdateInfo.latestVersion}` : "NoScope update"
+    );
+}
+
 function applyCapabilityVisibility() {
     document.querySelectorAll("[data-desktop-capability]").forEach(element => {
         const capability = element.dataset.desktopCapability;
         element.hidden = !capabilities[capability];
     });
+    updateUpdateButtonVisibility();
 }
 
 applyCapabilityVisibility();
@@ -1227,6 +1246,7 @@ function closeUpdatePanel() {
 async function checkForUpdates() {
     if (!capabilities.updater) return;
     latestUpdateInfo = null;
+    updateUpdateButtonVisibility();
     setUpdateBusy(true, "Checking...");
     setUpdateProgress({ total: 0, percent: 0 });
     setUpdateStatus({
@@ -1241,6 +1261,7 @@ async function checkForUpdates() {
         if (result?.error) throw new Error(result.error);
 
         latestUpdateInfo = result;
+        updateUpdateButtonVisibility();
         if (result.noRelease) {
             setUpdateStatus({
                 heading: "No update release published",
@@ -1283,6 +1304,7 @@ async function checkForUpdates() {
         btnRunUpdate.textContent = "Install update";
     } catch (error) {
         console.error("Unable to check for updates", error);
+        updateUpdateButtonVisibility();
         setUpdateStatus({
             heading: "Update check failed",
             detail: "NoScope could not reach the latest GitHub release.",
@@ -1292,6 +1314,7 @@ async function checkForUpdates() {
         btnRunUpdate.textContent = "Try again";
     } finally {
         setUpdateBusy(false);
+        updateUpdateButtonVisibility();
     }
 }
 
@@ -1390,6 +1413,9 @@ updateModal.addEventListener("click", event => {
 document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !updateModal.hidden) closeUpdatePanel();
 });
+if (capabilities.updater) {
+    setTimeout(() => checkForUpdates(), 800);
+}
 
 function openAssetsPanel() {
     assetsModal.hidden = false;
@@ -4431,6 +4457,8 @@ function openEditor(rowIndex, isNew = false) {
         ? table.header.findIndex(label => ["dateofbirth", "birthdate", "dob"].includes(normalizeFieldName(label)))
         : -1;
     playerBirthAgeDraft = birthDateIndex >= 0 ? (calculateAge(editDraft[birthDateIndex]) || "") : "";
+    playerFaceitSkillPresetOpen = false;
+    playerFaceitSkillPreset = PLAYER_FACEIT_ELO_PRESETS[0].value;
     if (activeTab.toLowerCase() === "teams") initializeTeamRoster(row);
     currentAssetKey = getAssetKey(activeTab, row);
     currentContentCreatorKey = isPlayerEditor ? getPlayerNoScopeKey(activeTab, row, rowIndex) : null;
@@ -6792,6 +6820,129 @@ function createPotentialSkillControl(table, field) {
     return item;
 }
 
+function randomSkillValue(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function applyPlayerSkillRange(fields, min, max) {
+    fields.forEach(field => {
+        editDraft[field.index] = String(randomSkillValue(min, max));
+    });
+}
+
+function markPlayerAsFaceitOrigin(table) {
+    const faceitField = table.header
+        .map((label, index) => ({ index, name: normalizeFieldName(label) }))
+        .find(field => ["fromfaceit", "faceit", "faceittag"].includes(field.name));
+    if (faceitField) editDraft[faceitField.index] = "True";
+}
+
+function getFaceitSkillPreset(value) {
+    return PLAYER_FACEIT_ELO_PRESETS.find(preset => preset.value === value) || PLAYER_FACEIT_ELO_PRESETS[0];
+}
+
+function applyFaceitSkillPreset(table, fields, presetValue) {
+    const preset = getFaceitSkillPreset(presetValue);
+    playerFaceitSkillPreset = preset.value;
+    playerFaceitSkillPresetOpen = true;
+    applyPlayerSkillRange(fields, preset.min, preset.max);
+    markPlayerAsFaceitOrigin(table);
+}
+
+function createPlayerEntryGuidePanel() {
+    const guide = document.createElement("aside");
+    guide.className = "player-entry-guide-panel";
+    guide.setAttribute("aria-label", "Player entry guide");
+    guide.innerHTML = `
+        <header><span>Entry guide</span></header>
+        <section>
+            <h4>Player status</h4>
+            <div class="entry-guide-row"><span class="entry-guide-mark retired"></span><span>Retired</span><b>Skill &lt; 13</b></div>
+            <div class="entry-guide-row"><span class="entry-guide-mark noteam"></span><span>No team</span><b>Skill &lt; 12</b></div>
+        </section>
+        <section>
+            <h4>Tier reference</h4>
+            <div class="entry-guide-grid">
+                <div class="entry-guide-row tier-t1"><span class="entry-guide-mark">T1</span><span>Elite</span><b>17-20</b></div>
+                <div class="entry-guide-row tier-t2"><span class="entry-guide-mark">T2</span><span>Pro</span><b>13-17</b></div>
+                <div class="entry-guide-row tier-t3"><span class="entry-guide-mark">T3</span><span>Comp</span><b>9-13</b></div>
+                <div class="entry-guide-row tier-t4"><span class="entry-guide-mark">T4</span><span>Amat</span><b>5-9</b></div>
+                <div class="entry-guide-row tier-nn"><span class="entry-guide-mark">NN</span><span>Beginner</span><b>1-5</b></div>
+            </div>
+        </section>
+        <section>
+            <h4>FACEIT Level 10</h4>
+            <div class="entry-guide-grid">
+                <div class="entry-guide-row faceit-base"><span class="entry-guide-mark">F</span><span>Base</span><b>7-11</b></div>
+                <div class="entry-guide-row faceit-high"><span class="entry-guide-mark">F</span><span>High</span><b>9-13</b></div>
+                <div class="entry-guide-row faceit-elite"><span class="entry-guide-mark">F</span><span>Elite</span><b>11-15</b></div>
+            </div>
+        </section>
+    `;
+    return guide;
+}
+
+function getPlayerSkillValues(row, fields) {
+    return fields
+        .map(field => Number.parseFloat(row[field.index]))
+        .map(value => Number.isFinite(value) ? Math.min(20, Math.max(0, value)) : null);
+}
+
+function findSimilarPlayerProfile(table, fields) {
+    const draftValues = getPlayerSkillValues(editDraft, fields);
+    let best = null;
+    table.rows.forEach((row, rowIndex) => {
+        if (rowIndex === editingRowIndex) return;
+        let compared = 0;
+        const distance = getPlayerSkillValues(row, fields).reduce((sum, value, index) => {
+            const draftValue = draftValues[index];
+            if (value === null || draftValue === null) return sum;
+            compared += 1;
+            return sum + ((value - draftValue) ** 2);
+        }, 0);
+        if (!compared) return;
+        const score = distance / compared;
+        if (!best || score < best.score) best = { row, rowIndex, score };
+    });
+    return best;
+}
+
+function createSkillsInsightPanel(table, fields) {
+    const panel = document.createElement("aside");
+    panel.className = "skills-insight-panel";
+
+    const similar = document.createElement("section");
+    similar.className = "skills-similar-card";
+    const heading = document.createElement("h4");
+    heading.textContent = "Similar profile";
+    similar.appendChild(heading);
+    const match = findSimilarPlayerProfile(table, fields);
+    if (match) {
+        const media = document.createElement("div");
+        media.className = "skills-similar-portrait";
+        media.innerHTML = "<span></span>";
+        loadCardAsset(media, getAssetKey(activeTab, match.row), getBundledAssetCandidates(activeTab, match.row));
+        const name = document.createElement("div");
+        name.className = "skills-similar-name";
+        const flag = createCountryFlag(getTableValue(table, match.row, ["nationality", "country"]), "skills-similar-flag");
+        if (flag) name.appendChild(flag);
+        const label = document.createElement("b");
+        label.textContent = getTableValue(table, match.row, ["nickname", "nick", "name"]) || `Player #${match.rowIndex + 1}`;
+        name.appendChild(label);
+        const team = document.createElement("p");
+        team.textContent = getTableValue(table, match.row, ["team", "teamid", "teamname"]) || "Free Agent";
+        similar.append(media, name, team);
+    } else {
+        const empty = document.createElement("p");
+        empty.className = "skills-similar-empty";
+        empty.textContent = "No similar player found.";
+        similar.appendChild(empty);
+    }
+
+    panel.appendChild(similar);
+    return panel;
+}
+
 function renderSkillsEditor(table) {
     editFormFields.className = "skills-editor-content";
     editFormFields.innerHTML = "";
@@ -6801,19 +6952,69 @@ function renderSkillsEditor(table) {
     const controls = document.createElement("div");
     controls.className = "skill-randomizer";
     controls.innerHTML = "<span>RANDOMIZE:</span>";
-    [["By skill",1,20],["★ T1",17,20],["◆ T2",13,17],["■ T3",9,13],["● T4",5,9],["? NN",1,5]].forEach(([label,min,max]) => {
+    [
+        { key: "t1", label: "T1", min: 17, max: 20 },
+        { key: "t2", label: "T2", min: 13, max: 17 },
+        { key: "t3", label: "\u25A0 T3", min: 9, max: 13 },
+        { key: "t4", label: "\u2022 T4", min: 5, max: 9 },
+        { key: "nn", label: "? NN", min: 1, max: 5 }
+    ].forEach(({ key, label, min, max }) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = label;
+        button.className = `skill-tier-button skill-tier-${key}`;
+        if (key === "t1" || key === "t2") {
+            const icon = document.createElement("span");
+            icon.className = `skill-tier-icon skill-tier-${key}-icon`;
+            icon.innerHTML = key === "t1"
+                ? '<svg viewBox="0 0 32 24" aria-hidden="true" focusable="false"><path class="t1-laurel" d="M4.6 16.5c2.4 1.7 5.1 2.4 8.1 2.1-2.2 1.5-5.3 1.7-9.3.5l1.2-2.6Zm1.1-4.1c2.2 1.6 4.6 2.5 7.2 2.7-2.3 1-5 .7-8.2-.8l1-1.9Zm2-3.5c1.9 1.5 4 2.5 6.2 3-2.3.7-4.8.1-7.4-1.8l1.2-1.2Zm1.6-3.2c1.5 1.5 3.2 2.7 5.1 3.5-2.1.3-4.2-.5-6.2-2.3l1.1-1.2Zm18.1 10.8-1.2 2.6c-4 1.2-7.1 1-9.3-.5 3 .3 5.7-.4 8.1-2.1h2.4Zm-1.1-4.1 1 1.9c-3.2 1.5-5.9 1.8-8.2.8 2.6-.2 5-.9 7.2-2.7Zm-2-3.5 1.2 1.2c-2.6 1.9-5.1 2.5-7.4 1.8 2.2-.5 4.3-1.5 6.2-3Zm-1.6-3.2 1.1 1.2c-2 1.8-4.1 2.6-6.2 2.3 1.9-.8 3.6-2 5.1-3.5Z"/><circle class="t1-globe" cx="16" cy="12" r="5.6"/><path class="t1-globe-shine" d="M12.3 10.4c1-2 3.6-3.2 5.7-2.2-2.1.1-3.7.8-5.7 2.2Z"/><path class="t1-ring" d="M16 5.4a6.6 6.6 0 1 1 0 13.2 6.6 6.6 0 0 1 0-13.2Zm0 2a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Z"/></svg>'
+                : '<svg viewBox="0 0 32 24" aria-hidden="true" focusable="false"><path class="t2-eagle" d="M16 5.3c2.7 3 6.8 3.2 12.1 1-1.3 2.6-3.8 4.2-7.3 4.9 3.1.3 5.5-.1 7.3-1.1-1.5 2.1-4.2 3.5-8.1 4.1 1.8.6 3.8.7 5.9.3-1.9 1.6-4.6 2.3-8.1 2l-1.8 2.7-1.8-2.7c-3.5.3-6.2-.4-8.1-2 2.1.4 4.1.3 5.9-.3-3.9-.6-6.6-2-8.1-4.1 1.8 1 4.2 1.4 7.3 1.1-3.5-.7-6-2.3-7.3-4.9 5.3 2.2 9.4 2 12.1-1Zm0 4.2-2.2 2.4 1.5-.4.7 2.8.7-2.8 1.5.4L16 9.5Z"/><path class="t2-head" d="M16 4.4 18.1 7H14l2-2.6Z"/><path class="t2-star" d="M7.4 4.4 8.3 6l1.8.2-1.3 1.2.4 1.8-1.8-.9-1.7.9.3-1.8-1.3-1.2 1.9-.2.8-1.6Zm17.2 0 .8 1.6 1.9.2L26 7.4l.3 1.8-1.7-.9-1.8.9.4-1.8-1.3-1.2 1.8-.2.9-1.6Z"/></svg>';
+            const text = document.createElement("span");
+            text.textContent = label;
+            button.append(icon, text);
+        } else {
+            button.textContent = label;
+        }
         button.addEventListener("click", () => {
-            ratingStats.forEach(field => { editDraft[field.index] = String(Math.floor(Math.random() * (max - min + 1)) + min); });
+            playerFaceitSkillPresetOpen = false;
+            applyPlayerSkillRange(ratingStats, min, max);
             renderSkillsEditor(table);
         });
         controls.appendChild(button);
     });
+    const faceitButton = document.createElement("button");
+    faceitButton.type = "button";
+    faceitButton.className = "skill-randomizer-faceit";
+    faceitButton.title = "Generate from FACEIT Level 10 ELO";
+    faceitButton.setAttribute("aria-label", "Generate from FACEIT Level 10 ELO");
+    faceitButton.innerHTML = '<img src="assets/badges/faceit-pro-league.png" alt="" aria-hidden="true"><span>FACEIT</span>';
+    faceitButton.addEventListener("click", () => {
+        applyFaceitSkillPreset(table, ratingStats, playerFaceitSkillPreset);
+        renderSkillsEditor(table);
+    });
+    controls.appendChild(faceitButton);
+    const faceitSelectWrap = document.createElement("label");
+    faceitSelectWrap.className = "faceit-elo-picker";
+    faceitSelectWrap.hidden = !playerFaceitSkillPresetOpen;
+    const faceitCaption = document.createElement("span");
+    faceitCaption.textContent = "ELO";
+    const faceitSelect = document.createElement("select");
+    PLAYER_FACEIT_ELO_PRESETS.forEach(preset => {
+        const option = document.createElement("option");
+        option.value = preset.value;
+        option.textContent = `${preset.label} (${preset.detail})`;
+        faceitSelect.appendChild(option);
+    });
+    faceitSelect.value = getFaceitSkillPreset(playerFaceitSkillPreset).value;
+    faceitSelect.addEventListener("change", () => {
+        applyFaceitSkillPreset(table, ratingStats, faceitSelect.value);
+        renderSkillsEditor(table);
+    });
+    faceitSelectWrap.append(faceitCaption, faceitSelect);
+    controls.appendChild(faceitSelectWrap);
     editFormFields.appendChild(controls);
     const hero = document.createElement("section");
     hero.className = "skills-hero";
+    hero.appendChild(createPlayerEntryGuidePanel());
     const primary = ratingStats.slice(0, 5);
     const radarValues = primary.map(field => Number.parseFloat(editDraft[field.index]) || 0);
     const radarWrap = document.createElement("div");
@@ -6828,6 +7029,7 @@ function renderSkillsEditor(table) {
         radarWrap.appendChild(label);
     });
     hero.appendChild(radarWrap);
+    hero.appendChild(createSkillsInsightPanel(table, ratingStats));
     editFormFields.appendChild(hero);
     const percentile = document.createElement("section");
     percentile.className = "percentile-panel";
@@ -6958,6 +7160,8 @@ function closeEditor(cancelled = false) {
     currentContentCreatorKey = null;
     contentCreatorDraft = false;
     playerBirthAgeDraft = "";
+    playerFaceitSkillPresetOpen = false;
+    playerFaceitSkillPreset = PLAYER_FACEIT_ELO_PRESETS[0].value;
     assetFileInput.value = "";
     if (cancelled && typeof resumeValidatorAfterEditor === "function") {
         resumeValidatorAfterEditor({ rerun: false });
