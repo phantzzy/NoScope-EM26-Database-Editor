@@ -449,6 +449,7 @@ internal sealed class InstallerForm : Form
 
         string installRoot = Path.GetFullPath(targetDirectory);
         Directory.CreateDirectory(installRoot);
+        WaitForInstalledAppToClose(installRoot, report);
 
         using Stream payload = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip")
             ?? throw new InvalidOperationException("Installer payload is missing. Rebuild with npm run custom-installer.");
@@ -496,6 +497,57 @@ internal sealed class InstallerForm : Form
         WriteUninstallRegistry(installRoot, iconPath);
         report(94, "Installing uninstaller...");
         report(100, "Install complete.");
+    }
+
+    private static void WaitForInstalledAppToClose(string installRoot, Action<int, string> report)
+    {
+        string installedExe = Path.GetFullPath(Path.Combine(installRoot, "NoScope.exe"));
+        DateTime deadline = DateTime.UtcNow.AddSeconds(20);
+        bool requestedClose = false;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            Process[] runningApps = Process.GetProcessesByName("NoScope")
+                .Where(process => IsProcessRunningFrom(process, installedExe))
+                .ToArray();
+
+            if (runningApps.Length == 0) return;
+
+            report(6, "Waiting for NoScope to close...");
+            foreach (Process process in runningApps)
+            {
+                try
+                {
+                    if (!requestedClose && process.MainWindowHandle != IntPtr.Zero) process.CloseMainWindow();
+                }
+                catch
+                {
+                    // Process information can disappear while the app is closing.
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+
+            requestedClose = true;
+            Thread.Sleep(500);
+        }
+
+        throw new InvalidOperationException("NoScope is still running. Close every NoScope window and run the installer again.");
+    }
+
+    private static bool IsProcessRunningFrom(Process process, string installedExe)
+    {
+        try
+        {
+            string? processPath = process.MainModule?.FileName;
+            return string.Equals(Path.GetFullPath(processPath ?? ""), installedExe, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void Uninstall(Action<int, string> report)
