@@ -223,15 +223,13 @@ async function downloadUpdateInstaller(event, downloadUrl, assetName) {
     return installerPath;
 }
 
-function launchInstallerAfterQuit(installerPath) {
-    const command = `timeout /t 1 /nobreak >nul & "${installerPath}"`;
-    const child = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", command], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true
-    });
-    child.unref();
-    app.quit();
+async function launchInstallerAfterQuit(installerPath) {
+    const launchError = await shell.openPath(installerPath);
+    if (launchError) {
+        throw new Error(`Windows could not start the update installer: ${launchError}`);
+    }
+
+    setTimeout(() => app.quit(), 500);
 }
 
 function toErrorMessage(error) {
@@ -687,7 +685,7 @@ ipcMain.handle("update:download-and-install", async (event, payload) => {
     try {
         const downloadUrl = validateUpdateDownloadUrl(payload?.downloadUrl);
         const installerPath = await downloadUpdateInstaller(event, downloadUrl, payload?.assetName);
-        launchInstallerAfterQuit(installerPath);
+        await launchInstallerAfterQuit(installerPath);
         return { started: true };
     } catch (error) {
         return { error: toErrorMessage(error) };

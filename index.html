@@ -70,6 +70,10 @@
                         <span class="brand-external-mark discord" aria-hidden="true"></span>
                         <span class="brand-external-link-label">Discord</span>
                     </a>
+                    <button class="brand-external-link update-available-link" id="btn-update" type="button" data-desktop-capability="updater" hidden>
+                        <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 7.75 6h-2.08A6 6 0 1 0 16.9 15H14v-2h6v6h-2v-2.36A8 8 0 1 1 12 4Zm1-1v8h-2V3h2Zm0 8 3.4-3.4 1.42 1.42L12 14.84 6.18 9.02 7.6 7.6 11 11h2Z"/></svg></span>
+                        <span class="brand-external-link-label">Update</span>
+                    </button>
                 </nav>
             </div>
             <div class="header-actions">
@@ -78,9 +82,6 @@
                 </button>
                 <button class="btn btn-secondary" id="btn-changelog" type="button">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm1 4v2h2V7H7Zm4 0v2h6V7h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Z"/></svg></span> Changelog
-                </button>
-                <button class="btn btn-secondary" id="btn-update" type="button" data-desktop-capability="updater">
-                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 7.75 6h-2.08A6 6 0 1 0 16.9 15H14v-2h6v6h-2v-2.36A8 8 0 1 1 12 4Zm1-1v8h-2V3h2Zm0 8 3.4-3.4 1.42 1.42L12 14.84 6.18 9.02 7.6 7.6 11 11h2Z"/></svg></span> Update
                 </button>
                 <button class="btn btn-secondary" id="btn-library" type="button">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h12a2 2 0 0 1 2 2v14H7a3 3 0 0 1-3-3V5a1 1 0 0 1 1-1Zm2 12.25A3 3 0 0 1 8 16h9V6H6v10.42c.3-.11.64-.17 1-.17ZM8 18a1 1 0 0 0 0 2h11v-2H8Zm1-9h5v2H9V9Zm0 3h7v2H9v-2Z"/></svg></span> Library
@@ -140,7 +141,7 @@
         <main class="main-content" id="main-content">
             <div class="empty-state" id="empty-state">
                 <div class="empty-icon" aria-hidden="true">&#128193;</div>
-                <h2 id="lbl-empty-title">No EMDB Loaded</h2>
+                <h2 id="lbl-empty-title">No EMDB Loaded!</h2>
                 <p id="lbl-empty-desc">Click "Open .emdb..." to get started.</p>
             </div>
             
