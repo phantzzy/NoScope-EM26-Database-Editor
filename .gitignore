@@ -20,6 +20,8 @@ node_modules/
 dist/
 build/
 release/
+installer/**/bin/
+installer/**/obj/
 
 # Local environment and signing material
 .env

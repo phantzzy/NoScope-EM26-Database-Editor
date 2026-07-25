@@ -1,5 +1,74 @@
 {
+  "name": "noscope",
+  "version": "2.2.0",
+  "private": true,
+  "description": "NoScope desktop app for editing Esports Manager .emdb databases.",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "npm run build:asset-manifest",
+    "build:asset-manifest": "node tools/build-asset-manifest.mjs",
+    "generate:installer-assets": "powershell -ExecutionPolicy Bypass -File tools/generate-installer-assets.ps1",
+    "stamp:app-icon": "powershell -ExecutionPolicy Bypass -File tools/stamp-app-icon.ps1",
+    "prepackage": "npm run generate:installer-assets",
+    "package": "electron-builder --win --dir",
+    "postpackage": "npm run stamp:app-icon",
+    "dist": "npm run custom-installer",
+    "dist:nsis": "electron-builder --win",
+    "custom-installer": "powershell -ExecutionPolicy Bypass -File tools/build-custom-installer.ps1"
+  },
   "dependencies": {
-    "flag-icons": "^7.5.0"
+    "flag-icons": "^7.5.0",
+    "jszip": "^3.10.1",
+    "papaparse": "^5.4.1"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "app.noscope.editor",
+    "productName": "NoScope",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "!assets/custom/**/*",
+      "data/**/*",
+      "changelogs/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "artifactName": "NoScope-${version}-Setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "NoScope",
+      "installerIcon": "build/installerIcon.ico",
+      "uninstallerIcon": "build/uninstallerIcon.ico",
+      "installerHeader": "build/installerHeader.bmp",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/installerSidebar.bmp",
+      "displayLanguageSelector": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "NoScope-${version}-Portable.${ext}"
+    }
   }
 }

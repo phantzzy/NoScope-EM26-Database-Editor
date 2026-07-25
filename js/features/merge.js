@@ -1,6 +1,5 @@
 const MERGE_TABLE_ORDER = ["Players", "Teams", "Staff", "Sponsors", "Tournaments"];
-const MERGE_FEATURE_ENABLED = false;
-const MERGE_DISABLED_MESSAGE = "Merge Beta is temporarily disabled while database safety fixes are tested.";
+const MERGE_FEATURE_ENABLED = true;
 const MERGE_PLAYER_GROUPS = [
     ["identity", "Identity and nationality"],
     ["team", "Teams and roster positions"],
@@ -12,6 +11,56 @@ const MERGE_PLAYER_GROUPS = [
     ["details", "Details, earnings, PR, and links"]
 ];
 const MERGE_REVIEW_PAGE_SIZE = 40;
+const MERGE_REQUIRED_FIELD_ALIASES = {
+    players: [
+        ["nickname", "nick"],
+        ["dateofbirth", "birthdate", "dob"],
+        ["country", "nationality"],
+        ["role1", "primaryrole", "role"],
+        ["skill"],
+        ["internalid", "playerid", "id"]
+    ],
+    staff: [
+        ["nickname", "nick"],
+        ["firstname", "forename", "name"],
+        ["surname", "lastname"],
+        ["role", "job", "type", "position"],
+        ["country", "nationality"],
+        ["internalid", "staffid", "id"]
+    ],
+    staffs: [
+        ["nickname", "nick"],
+        ["firstname", "forename", "name"],
+        ["surname", "lastname"],
+        ["role", "job", "type", "position"],
+        ["country", "nationality"],
+        ["internalid", "staffid", "id"]
+    ],
+    teams: [
+        ["nick", "nickname"],
+        ["name", "teamname"],
+        ["country", "nationality"],
+        ["rating"]
+    ],
+    tournaments: [
+        ["id", "internalid", "tournamentid"],
+        ["name", "tournamentname", "title"],
+        ["tier"],
+        ["prizefund", "prizemoney"],
+        ["type", "format"],
+        ["country", "nationality"],
+        ["city", "hostcity", "locationcity"]
+    ],
+    sponsors: [
+        ["num", "number", "id", "internalid"],
+        ["companyname", "name"],
+        ["description", "bio", "about"],
+        ["tier", "level"],
+        ["type", "category"]
+    ]
+};
+const MERGE_INTERNAL_ID_FIELDS = new Set(["id"]);
+const MERGE_BLANK_FALSE_FIELDS = new Set(["retired", "fromfaceit", "disbanded"]);
 
 const btnMergeDatabases = document.getElementById("btn-merge-databases");
 const btnUndoMerge = document.getElementById("btn-undo-merge");
@@ -33,6 +82,7 @@ function createEmptyMergeState() {
         step: "source",
         incomingDb: null,
         incomingFileName: "",
+        incomingLibraryId: "",
         scopes: {
             tables: {},
             playerGroups: Object.fromEntries(MERGE_PLAYER_GROUPS.map(([key]) => [key, true])),
@@ -41,6 +91,7 @@ function createEmptyMergeState() {
             addMissingColumns: true
         },
         proposals: [],
+        safetyEvents: [],
         unchangedCount: 0,
         reviewFilter: { table: "all", action: "all", search: "" },
         reviewPage: 1,
@@ -56,15 +107,17 @@ function cloneMergeValue(value) {
 function updateMergeAvailability() {
     if (!MERGE_FEATURE_ENABLED) {
         btnMergeDatabases.disabled = true;
-        btnMergeDatabases.title = MERGE_DISABLED_MESSAGE;
-        clearMergeUndo();
+        btnMergeDatabases.title = "Merge Beta is temporarily disabled while database safety issues are fixed.";
+        btnMergeDatabases.setAttribute("aria-disabled", "true");
         return;
     }
+
     const loaded = Boolean(db?.tables && Object.keys(db.tables).length);
     btnMergeDatabases.disabled = !loaded;
     btnMergeDatabases.title = loaded
         ? `Merge another database into ${db.fileName || "the currently loaded database"}`
         : "Load a base database before merging";
+    btnMergeDatabases.setAttribute("aria-disabled", String(!loaded));
 }
 
 function clearMergeUndo() {
@@ -84,6 +137,36 @@ function getMergeTableName(database, requestedName) {
 function getMergeTable(database, requestedName) {
     const tableName = getMergeTableName(database, requestedName);
     return tableName ? database.tables[tableName] : null;
+}
+
+function addMergeSafetyEvent(type, tableName, label, detail = "") {
+    mergeState.safetyEvents.push({
+        type,
+        tableName,
+        label: label || tableName || "Record",
+        detail
+    });
+}
+
+function getMergeSafetyEventMeta(type) {
+    const meta = {
+        incompleteAddition: ["Incomplete additions skipped", "Incoming records missing required game fields were not added."],
+        blankOverwrite: ["Blank overwrites blocked", "Filled Database A values were protected from empty incoming values."],
+        internalIdChange: ["ID changes blocked", "Existing internal IDs were preserved."],
+        legacyFalseNormalized: ["Legacy false values normalized", "Incoming False/No values for blank-or-1 fields were treated as blank."]
+    };
+    return meta[type] || ["Safety action", "No additional details."];
+}
+
+function getMergeSafetySummary() {
+    const summary = new Map();
+    mergeState.safetyEvents.forEach(event => {
+        if (!summary.has(event.type)) summary.set(event.type, { type: event.type, count: 0, samples: [] });
+        const entry = summary.get(event.type);
+        entry.count += 1;
+        if (entry.samples.length < 5) entry.samples.push(event);
+    });
+    return [...summary.values()];
 }
 
 function getMergeValue(table, row, aliases) {
@@ -290,7 +373,47 @@ function getMergeMappedBaseIndex(tableName, incomingLabel, lookup) {
     return lookup.canonical.get(canonicalMergeFieldName(tableName, incomingLabel)) ?? -1;
 }
 
-function buildMergeFieldDiffs(tableName, baseTable, baseRow, incomingTable, incomingRow, isAddition = false) {
+function getMergeColumnIndex(table, aliases) {
+    const normalizedAliases = aliases.map(alias => normalizeFieldName(alias));
+    return table?.header?.findIndex(header => normalizedAliases.includes(normalizeFieldName(header))) ?? -1;
+}
+
+function getMergeRequiredFieldAliases(tableName) {
+    return MERGE_REQUIRED_FIELD_ALIASES[String(tableName || "").toLowerCase()] || [];
+}
+
+function hasMergeRequiredFields(tableName, table, row) {
+    return getMergeRequiredFieldAliases(tableName).every(aliases => {
+        const index = getMergeColumnIndex(table, aliases);
+        return index >= 0 && String(row[index] ?? "").trim();
+    });
+}
+
+function getMissingMergeRequiredFields(tableName, table, row) {
+    return getMergeRequiredFieldAliases(tableName)
+        .map(aliases => {
+            const index = getMergeColumnIndex(table, aliases);
+            const label = index >= 0 ? table.header[index] : aliases[0];
+            return index >= 0 && String(row[index] ?? "").trim() ? "" : label;
+        })
+        .filter(Boolean);
+}
+
+function normalizeMergeIncomingValue(tableName, label, value) {
+    const canonical = canonicalMergeFieldName(tableName, label);
+    const normalized = normalizeFieldName(label);
+    const rawValue = String(value ?? "");
+    if (
+        MERGE_BLANK_FALSE_FIELDS.has(canonical)
+        || MERGE_BLANK_FALSE_FIELDS.has(normalized)
+    ) {
+        const compactValue = normalizeMergeIdentity(rawValue);
+        if (["false", "no"].includes(compactValue)) return "";
+    }
+    return rawValue;
+}
+
+function buildMergeFieldDiffs(tableName, baseTable, baseRow, incomingTable, incomingRow, isAddition = false, eventLabel = "") {
     const lookup = buildMergeFieldLookup(tableName, baseTable);
     const seenBaseIndexes = new Set();
     const seenMissingKeys = new Set();
@@ -305,7 +428,21 @@ function buildMergeFieldDiffs(tableName, baseTable, baseRow, incomingTable, inco
         if (baseIndex >= 0) seenBaseIndexes.add(baseIndex);
         else seenMissingKeys.add(canonical);
         const oldValue = baseIndex >= 0 && baseRow ? String(baseRow[baseIndex] ?? "") : "";
-        const newValue = String(incomingRow[incomingIndex] ?? "");
+        const rawNewValue = String(incomingRow[incomingIndex] ?? "");
+        const newValue = normalizeMergeIncomingValue(tableName, label, rawNewValue);
+        if (!isAddition && rawNewValue !== newValue) {
+            addMergeSafetyEvent("legacyFalseNormalized", tableName, eventLabel, `${label}: ${rawNewValue || "Empty"} treated as ${newValue || "blank"}`);
+        }
+        const oldHasValue = Boolean(oldValue.trim());
+        const newHasValue = Boolean(newValue.trim());
+        if (!isAddition && oldHasValue && !newHasValue) {
+            addMergeSafetyEvent("blankOverwrite", tableName, eventLabel, `${label}: kept ${oldValue}`);
+            return null;
+        }
+        if (!isAddition && MERGE_INTERNAL_ID_FIELDS.has(canonical) && oldHasValue && newHasValue && oldValue !== newValue) {
+            addMergeSafetyEvent("internalIdChange", tableName, eventLabel, `${label}: kept ${oldValue}, skipped ${newValue}`);
+            return null;
+        }
         const isAutomaticIncomingPotential = tableName.toLowerCase() === "players"
             && canonical === "potential"
             && (!newValue.trim() || Number.parseFloat(newValue) <= 0);
@@ -347,12 +484,18 @@ function createMergeProposal(tableName, baseTable, incomingTable, incomingRow, i
             incomingIndex,
             baseIndex: -1,
             candidates: match.candidates,
+            resolutionChoice: "skip",
+            resolvedAsSkip: false,
             selected: false,
             fieldDiffs: []
         };
     }
     const isAddition = match.type === "new";
-    const fieldDiffs = buildMergeFieldDiffs(tableName, baseTable, baseRow, incomingTable, incomingRow, isAddition);
+    if (isAddition && !hasMergeRequiredFields(tableName, incomingTable, incomingRow)) {
+        addMergeSafetyEvent("incompleteAddition", tableName, incomingLabel, `Missing ${getMissingMergeRequiredFields(tableName, incomingTable, incomingRow).join(", ")}`);
+        return null;
+    }
+    const fieldDiffs = buildMergeFieldDiffs(tableName, baseTable, baseRow, incomingTable, incomingRow, isAddition, incomingLabel);
     const identityDiffs = isAddition ? [] : fieldDiffs.filter(diff => isMergeIdentityDiff(tableName, diff));
     const hasTransfer = tableName.toLowerCase() === "players"
         && fieldDiffs.some(diff => diff.group === "team");
@@ -369,7 +512,7 @@ function createMergeProposal(tableName, baseTable, incomingTable, incomingRow, i
         incomingIndex,
         baseIndex,
         candidates: match.candidates || [],
-        selected: fieldDiffs.length > 0,
+        selected: fieldDiffs.length > 0 && !identityDiffs.length,
         fieldDiffs
     };
 }
@@ -377,6 +520,7 @@ function createMergeProposal(tableName, baseTable, incomingTable, incomingRow, i
 function buildMergeProposals() {
     const proposals = [];
     let unchangedCount = 0;
+    mergeState.safetyEvents = [];
     MERGE_TABLE_ORDER.forEach(requestedTableName => {
         const incomingTableName = getMergeTableName(mergeState.incomingDb, requestedTableName);
         if (!incomingTableName || mergeState.scopes.tables[incomingTableName] === false) return;
@@ -399,6 +543,10 @@ function buildMergeProposals() {
                 incomingIndex,
                 match
             );
+            if (!proposal) {
+                unchangedCount += 1;
+                return;
+            }
             if (proposal.action !== "conflict" && !proposal.fieldDiffs.length) {
                 unchangedCount += 1;
                 return;
@@ -418,6 +566,9 @@ function resolveMergeConflict(proposal, choice) {
     const baseTable = baseTableName ? db.tables[baseTableName] : null;
     if (choice === "skip") {
         proposal.selected = false;
+        proposal.resolvedAsSkip = true;
+        proposal.resolutionChoice = "skip";
+        proposal.resolutionError = "";
         return;
     }
     const match = choice === "add"
@@ -431,9 +582,33 @@ function resolveMergeConflict(proposal, choice) {
         proposal.incomingIndex,
         match
     );
+    if (!replacement) {
+        proposal.selected = false;
+        proposal.resolutionError = "That resolution was blocked by merge safety rules. Check the safety report for the missing or protected fields.";
+        return;
+    }
     replacement.id = proposal.id;
     const proposalIndex = mergeState.proposals.findIndex(item => item.id === proposal.id);
     if (proposalIndex >= 0) mergeState.proposals[proposalIndex] = replacement;
+}
+
+function getMergeRowSummary(tableName, table, row, fallbackIndex = 0) {
+    const normalizedTable = String(tableName || "").toLowerCase();
+    const parts = [];
+    const id = getMergeValue(table, row, ["internalid", "playerid", "teamid", "staffid", "sponsorid", "tournamentid", "id"]);
+    const first = getMergeValue(table, row, ["firstname", "forename", "name"]);
+    const last = getMergeValue(table, row, ["lastname", "surname"]);
+    const country = getMergeValue(table, row, ["country", "nationality"]);
+    const team = normalizedTable === "players" || normalizedTable === "staff" || normalizedTable === "staffs"
+        ? getMergeValue(table, row, ["team", "teamname", "teamid"])
+        : "";
+    const role = getMergeValue(table, row, ["role1", "primaryrole", "role", "type", "tier"]);
+    if (id) parts.push(`ID ${id}`);
+    if (first || last) parts.push([first, last].filter(Boolean).join(" "));
+    if (team) parts.push(team);
+    if (country) parts.push(country);
+    if (role) parts.push(role);
+    return parts.length ? parts.join(" - ") : `Row ${fallbackIndex + 1}`;
 }
 
 async function parseIncomingMergeDatabase(file) {
@@ -470,6 +645,92 @@ async function parseIncomingMergeDatabase(file) {
         return incomingDb;
     } finally {
         hideDatabaseLoading();
+    }
+}
+
+function isMergeEmdbFile(file) {
+    return Boolean(file?.name && file.name.toLowerCase().endsWith(".emdb"));
+}
+
+async function setIncomingMergeDatabaseFromFile(file, options = {}) {
+    if (!file) return false;
+    if (!isMergeEmdbFile(file)) {
+        setMergeFeedback("Choose or drop an .emdb file for Database B.");
+        return false;
+    }
+    try {
+        const incomingDb = await parseIncomingMergeDatabase(file);
+        mergeState.incomingDb = incomingDb;
+        mergeState.incomingFileName = options.label || file.name;
+        mergeState.incomingLibraryId = options.libraryEntry?.id || "";
+        resetMergeScopes();
+        setMergeFeedback();
+        renderMergeModal();
+        return true;
+    } catch (error) {
+        console.error(error);
+        setMergeFeedback(error.message || "Unable to open the incoming database.");
+        return false;
+    } finally {
+        mergeFileInput.value = "";
+    }
+}
+
+function bindMergeDropTarget(element) {
+    const setDragging = active => element.classList.toggle("drag-over", active);
+    ["dragenter", "dragover"].forEach(eventName => {
+        element.addEventListener(eventName, event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+            setDragging(true);
+        });
+    });
+    element.addEventListener("dragleave", event => {
+        if (element.contains(event.relatedTarget)) return;
+        setDragging(false);
+    });
+    element.addEventListener("drop", async event => {
+        event.preventDefault();
+        event.stopPropagation();
+        setDragging(false);
+        const file = Array.from(event.dataTransfer?.files || []).find(isMergeEmdbFile);
+        if (!file) {
+            setMergeFeedback("Drop an .emdb file for Database B.");
+            return;
+        }
+        await setIncomingMergeDatabaseFromFile(file);
+    });
+}
+
+function getMergeLibraryEntries() {
+    return typeof LIBRARY_DATABASES !== "undefined" && Array.isArray(LIBRARY_DATABASES)
+        ? LIBRARY_DATABASES
+        : [];
+}
+
+async function fetchMergeLibraryBlob(entry) {
+    if (typeof fetchBundledDatabaseBlob === "function") return fetchBundledDatabaseBlob(entry);
+    const response = await fetch(`data/${entry.fileName}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`${entry.name} request failed (${response.status})`);
+    return response.blob();
+}
+
+async function loadIncomingMergeLibraryDatabase(entry, triggerButton) {
+    if (!entry) return;
+    if (triggerButton) triggerButton.disabled = true;
+    try {
+        const blob = await fetchMergeLibraryBlob(entry);
+        const file = new File([blob], entry.fileName, { type: "application/octet-stream" });
+        await setIncomingMergeDatabaseFromFile(file, {
+            label: `${entry.name} (${entry.fileName})`,
+            libraryEntry: entry
+        });
+    } catch (error) {
+        console.error(error);
+        setMergeFeedback(error.message || `Unable to load ${entry.name} from the Library.`);
+    } finally {
+        if (triggerButton) triggerButton.disabled = false;
     }
 }
 
@@ -543,16 +804,47 @@ function renderMergeSourceStep() {
         replace.textContent = "Replace file";
         replace.addEventListener("click", () => mergeFileInput.click());
         incoming.appendChild(replace);
+        bindMergeDropTarget(incoming);
         databases.appendChild(incoming);
     } else {
         const picker = document.createElement("button");
         picker.type = "button";
         picker.className = "merge-file-picker";
-        picker.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v1H3v-3Zm0 5h18l-1.45 6.08A3 3 0 0 1 16.63 20H6.37a3 3 0 0 1-2.92-2.42L2 11.5h1Z"/></svg><strong>Choose incoming .emdb</strong><span>This file is read temporarily and will not replace Database A.</span>';
+        picker.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v1H3v-3Zm0 5h18l-1.45 6.08A3 3 0 0 1 16.63 20H6.37a3 3 0 0 1-2.92-2.42L2 11.5h1Z"/></svg><strong>Choose or drop incoming .emdb</strong><span>This file is read temporarily and will not replace Database A.</span>';
         picker.addEventListener("click", () => mergeFileInput.click());
+        bindMergeDropTarget(picker);
         databases.appendChild(picker);
     }
     wrap.append(intro, databases);
+    const libraryEntries = getMergeLibraryEntries();
+    if (libraryEntries.length) {
+        const library = document.createElement("section");
+        library.className = "merge-library-picker";
+        const heading = document.createElement("div");
+        heading.className = "merge-library-heading";
+        const title = document.createElement("strong");
+        title.textContent = "Library databases";
+        const note = document.createElement("span");
+        note.textContent = "Use one of the bundled Library databases as Database B.";
+        heading.append(title, note);
+        const grid = document.createElement("div");
+        grid.className = "merge-library-grid";
+        libraryEntries.forEach(entry => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "merge-library-option";
+            option.classList.toggle("active", mergeState.incomingLibraryId === entry.id);
+            const optionTitle = document.createElement("strong");
+            optionTitle.textContent = entry.name;
+            const optionMeta = document.createElement("span");
+            optionMeta.textContent = `by ${entry.owner} - ${entry.fileName}`;
+            option.append(optionTitle, optionMeta);
+            option.addEventListener("click", () => loadIncomingMergeLibraryDatabase(entry, option));
+            grid.appendChild(option);
+        });
+        library.append(heading, grid);
+        wrap.appendChild(library);
+    }
     mergeContent.appendChild(wrap);
 }
 
@@ -657,9 +949,10 @@ function renderMergeScopeStep() {
 }
 
 function getMergeProposalCounts() {
-    const counts = { add: 0, update: 0, transfer: 0, conflict: 0 };
+    const counts = { add: 0, update: 0, transfer: 0, conflict: 0, risky: 0 };
     mergeState.proposals.forEach(proposal => {
         if (counts[proposal.action] !== undefined) counts[proposal.action] += 1;
+        if (proposal.identityChanged) counts.risky += 1;
     });
     return counts;
 }
@@ -691,6 +984,7 @@ function createMergeSummaryBar() {
         ["update", "Update"],
         ["transfer", "Transfer"],
         ["conflict", "Conflict"],
+        ["risky", "Review"],
         ["unchanged", "Unchanged"]
     ].forEach(([key, label]) => {
         const item = document.createElement("span");
@@ -700,6 +994,51 @@ function createMergeSummaryBar() {
         bar.appendChild(item);
     });
     return bar;
+}
+
+function createMergeSafetyReport(options = {}) {
+    const summary = getMergeSafetySummary();
+    const section = document.createElement("section");
+    section.className = `merge-safety-report${options.compact ? " merge-safety-report-compact" : ""}`;
+    const heading = document.createElement("div");
+    heading.className = "merge-safety-heading";
+    const title = document.createElement("strong");
+    title.textContent = summary.length ? "Safety report" : "Safety report clean";
+    const note = document.createElement("span");
+    note.textContent = summary.length
+        ? "NoScope blocked risky incoming values before they reached the review list."
+        : "No risky blank overwrites, incomplete additions, or protected ID changes were detected.";
+    heading.append(title, note);
+    section.appendChild(heading);
+    if (!summary.length) return section;
+
+    const grid = document.createElement("div");
+    grid.className = "merge-safety-grid";
+    summary.forEach(item => {
+        const [label, description] = getMergeSafetyEventMeta(item.type);
+        const card = document.createElement("article");
+        const count = document.createElement("b");
+        count.textContent = String(item.count);
+        const copy = document.createElement("div");
+        const cardTitle = document.createElement("strong");
+        cardTitle.textContent = label;
+        const cardDescription = document.createElement("span");
+        cardDescription.textContent = description;
+        copy.append(cardTitle, cardDescription);
+        card.append(count, copy);
+        if (!options.compact && item.samples.length) {
+            const samples = document.createElement("ul");
+            item.samples.forEach(sample => {
+                const row = document.createElement("li");
+                row.textContent = `${sample.tableName}: ${sample.label}${sample.detail ? ` - ${sample.detail}` : ""}`;
+                samples.appendChild(row);
+            });
+            card.appendChild(samples);
+        }
+        grid.appendChild(card);
+    });
+    section.appendChild(grid);
+    return section;
 }
 
 function createMergeReviewToolbar() {
@@ -745,10 +1084,10 @@ function createMergeReviewToolbar() {
     });
     const clean = document.createElement("button");
     clean.type = "button";
-    clean.textContent = "Approve clean";
+    clean.textContent = "Approve safe";
     clean.addEventListener("click", () => {
         getFilteredMergeProposals().forEach(proposal => {
-            if (proposal.action !== "conflict") proposal.selected = true;
+            if (proposal.action !== "conflict" && !proposal.identityChanged) proposal.selected = true;
         });
         renderMergeModal();
     });
@@ -797,31 +1136,97 @@ function createMergeFieldDiffRow(proposal, diff) {
 function createMergeConflictControl(proposal) {
     const wrap = document.createElement("div");
     wrap.className = "merge-conflict-control";
-    const label = document.createElement("span");
-    label.textContent = "Choose the matching record:";
-    const select = document.createElement("select");
-    const skip = document.createElement("option");
-    skip.value = "skip";
-    skip.textContent = "Skip this incoming record";
-    select.appendChild(skip);
-    if (mergeState.scopes.addMissing) {
-        const add = document.createElement("option");
-        add.value = "add";
-        add.textContent = "Treat as a new record";
-        select.appendChild(add);
-    }
+    const intro = document.createElement("div");
+    intro.className = "merge-conflict-intro";
+    const title = document.createElement("strong");
+    title.textContent = proposal.resolvedAsSkip ? "Skipped ambiguous incoming record" : "Resolve ambiguous match";
+    const note = document.createElement("span");
+    note.textContent = "Choose a base record to update, add it as new, or keep it skipped. Nothing changes until you apply the resolution.";
+    intro.append(title, note);
+
+    const choices = document.createElement("div");
+    choices.className = "merge-conflict-choices";
+    const preview = document.createElement("div");
+    preview.className = "merge-conflict-preview";
+
     const baseTable = getMergeTable(db, proposal.tableName);
+    const incomingTable = mergeState.incomingDb.tables[proposal.tableName];
+    const incomingRow = incomingTable.rows[proposal.incomingIndex];
+    const options = [{
+        value: "skip",
+        label: "Skip incoming record",
+        detail: "Leave Database A unchanged."
+    }];
+    if (mergeState.scopes.addMissing) {
+        options.push({
+            value: "add",
+            label: "Add as a new record",
+            detail: getMergeRowSummary(proposal.tableName, incomingTable, incomingRow, proposal.incomingIndex)
+        });
+    }
     proposal.candidates.forEach(baseIndex => {
-        const option = document.createElement("option");
-        option.value = String(baseIndex);
-        option.textContent = `Match: ${getMergeEntityLabel(proposal.tableName, baseTable, baseTable.rows[baseIndex], baseIndex)}`;
-        select.appendChild(option);
+        const row = baseTable.rows[baseIndex];
+        options.push({
+            value: String(baseIndex),
+            label: `Match ${getMergeEntityLabel(proposal.tableName, baseTable, row, baseIndex)}`,
+            detail: getMergeRowSummary(proposal.tableName, baseTable, row, baseIndex)
+        });
     });
-    select.addEventListener("change", () => {
-        resolveMergeConflict(proposal, select.value);
+
+    const setChoice = value => {
+        proposal.resolutionChoice = value;
+        choices.querySelectorAll(".merge-conflict-choice").forEach(item => {
+            item.classList.toggle("selected", item.dataset.value === value);
+            const input = item.querySelector("input");
+            if (input) input.checked = item.dataset.value === value;
+        });
+        const option = options.find(item => item.value === value) || options[0];
+        preview.innerHTML = "";
+        const previewTitle = document.createElement("strong");
+        previewTitle.textContent = option.label;
+        const previewDetail = document.createElement("span");
+        previewDetail.textContent = option.detail;
+        preview.append(previewTitle, previewDetail);
+    };
+
+    options.forEach(option => {
+        const item = document.createElement("label");
+        item.className = "merge-conflict-choice";
+        item.dataset.value = option.value;
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = `merge-conflict-${proposal.id}`;
+        input.value = option.value;
+        const copy = document.createElement("span");
+        const optionTitle = document.createElement("strong");
+        optionTitle.textContent = option.label;
+        const optionDetail = document.createElement("small");
+        optionDetail.textContent = option.detail;
+        copy.append(optionTitle, optionDetail);
+        item.append(input, copy);
+        input.addEventListener("change", () => setChoice(option.value));
+        choices.appendChild(item);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "merge-conflict-actions";
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.textContent = proposal.resolvedAsSkip ? "Update resolution" : "Apply resolution";
+    apply.addEventListener("click", () => {
+        resolveMergeConflict(proposal, proposal.resolutionChoice || "skip");
         renderMergeModal();
     });
-    wrap.append(label, select);
+    actions.appendChild(apply);
+
+    wrap.append(intro, choices, preview, actions);
+    if (proposal.resolutionError) {
+        const error = document.createElement("p");
+        error.className = "merge-conflict-error";
+        error.textContent = proposal.resolutionError;
+        wrap.appendChild(error);
+    }
+    setChoice(proposal.resolutionChoice || "skip");
     return wrap;
 }
 
@@ -950,7 +1355,7 @@ function createMergeReviewPagination(filtered, pageCount) {
 function renderMergeReviewStep() {
     const wrap = document.createElement("div");
     wrap.className = "merge-review-step";
-    wrap.append(createMergeSummaryBar(), createMergeReviewToolbar());
+    wrap.append(createMergeSummaryBar(), createMergeSafetyReport(), createMergeReviewToolbar());
     const filtered = getFilteredMergeProposals();
     const pageCount = Math.max(1, Math.ceil(filtered.length / MERGE_REVIEW_PAGE_SIZE));
     mergeState.reviewPage = Math.min(mergeState.reviewPage, pageCount);
@@ -993,7 +1398,7 @@ function renderMergeResultStep() {
     undo.className = "btn btn-secondary";
     undo.textContent = "Undo merge";
     undo.addEventListener("click", undoLastMerge);
-    wrap.append(icon, heading, counts, undo);
+    wrap.append(icon, heading, counts, createMergeSafetyReport({ compact: true }), createMergeHealthSummary(result.healthChecks), undo);
     mergeContent.appendChild(wrap);
 }
 
@@ -1042,7 +1447,7 @@ function renderMergeModal(options = {}) {
 
 function openMergeModal() {
     if (!MERGE_FEATURE_ENABLED) {
-        if (typeof setStatus === "function") setStatus(MERGE_DISABLED_MESSAGE, "warning");
+        setStatus("Merge Beta is temporarily disabled.", "error");
         return;
     }
     if (!db?.tables || !Object.keys(db.tables).length) return;
@@ -1115,6 +1520,112 @@ function countMergeDuplicateIdWarnings() {
     return warnings;
 }
 
+function getMergeTeamAliasSet() {
+    const teamsTable = getMergeTable(db, "Teams");
+    const aliases = new Set();
+    teamsTable?.rows?.forEach(row => {
+        ["teamid", "internalid", "id", "nick", "nickname", "name", "abbreviation", "shortname"].forEach(alias => {
+            const value = normalizeMergeIdentity(getMergeValue(teamsTable, row, [alias]));
+            if (value) aliases.add(value);
+        });
+    });
+    return aliases;
+}
+
+function countMissingRequiredRecords(tableName, table) {
+    return table.rows.reduce((count, row) => {
+        return hasMergeRequiredFields(tableName, table, row) ? count : count + 1;
+    }, 0);
+}
+
+function getMergePostValidationSummary() {
+    const checks = [];
+    Object.entries(db.tables).forEach(([tableName, table]) => {
+        const missingRequired = countMissingRequiredRecords(tableName, table);
+        if (missingRequired) {
+            checks.push({
+                tone: "danger",
+                label: `${tableName} missing required fields`,
+                count: missingRequired,
+                detail: "These records may fail strict game loading."
+            });
+        }
+    });
+
+    const duplicateIds = countMergeDuplicateIdWarnings();
+    if (duplicateIds) {
+        checks.push({
+            tone: "danger",
+            label: "Duplicate internal IDs",
+            count: duplicateIds,
+            detail: "Duplicate IDs can break identity and asset lookups."
+        });
+    }
+
+    const teamsTable = getMergeTable(db, "Teams");
+    if (teamsTable) {
+        const ratingIndex = getMergeColumnIndex(teamsTable, ["rating"]);
+        const blankRatings = ratingIndex >= 0
+            ? teamsTable.rows.filter(row => !String(row[ratingIndex] ?? "").trim()).length
+            : teamsTable.rows.length;
+        if (blankRatings) {
+            checks.push({
+                tone: "danger",
+                label: "Teams with blank Rating",
+                count: blankRatings,
+                detail: "Blank team ratings matched the zero-teams failure."
+            });
+        }
+    }
+
+    const teamAliases = getMergeTeamAliasSet();
+    [["Players", ["team", "teamname", "teamid"]], ["Staff", ["team", "teamname", "teamid"]]].forEach(([requestedName, aliases]) => {
+        const table = getMergeTable(db, requestedName);
+        if (!table || !teamAliases.size) return;
+        const missingRefs = table.rows.filter(row => {
+            const team = normalizeMergeIdentity(getMergeValue(table, row, aliases));
+            return team && !isFreeAgentValue(team) && !teamAliases.has(team);
+        }).length;
+        if (missingRefs) {
+            checks.push({
+                tone: "warning",
+                label: `${requestedName} with unknown team`,
+                count: missingRefs,
+                detail: "Team references should match a Teams row."
+            });
+        }
+    });
+
+    return checks;
+}
+
+function createMergeHealthSummary(checks = []) {
+    const section = document.createElement("section");
+    section.className = "merge-health-summary";
+    const heading = document.createElement("div");
+    heading.className = "merge-safety-heading";
+    const title = document.createElement("strong");
+    title.textContent = checks.length ? "Post-merge checks" : "Post-merge checks passed";
+    const note = document.createElement("span");
+    note.textContent = checks.length
+        ? "Review these before saving the merged database."
+        : "No missing required fields, duplicate IDs, blank team ratings, or unknown team references were found.";
+    heading.append(title, note);
+    section.appendChild(heading);
+    if (!checks.length) return section;
+
+    const grid = document.createElement("div");
+    grid.className = "merge-health-grid";
+    checks.forEach(check => {
+        const card = document.createElement("article");
+        card.dataset.tone = check.tone || "warning";
+        card.innerHTML = `<b>${check.count}</b><div><strong>${check.label}</strong><span>${check.detail}</span></div>`;
+        grid.appendChild(card);
+    });
+    section.appendChild(grid);
+    return section;
+}
+
 function applyApprovedMerge() {
     const approved = mergeState.proposals.filter(proposal =>
         proposal.action !== "conflict"
@@ -1164,6 +1675,7 @@ function applyApprovedMerge() {
         }
     }
     result.warnings = countMergeTeamWarnings(affectedPlayerIndexes) + countMergeDuplicateIdWarnings();
+    result.healthChecks = getMergePostValidationSummary();
     invalidatePlayerLeaderboardRanks();
     markUnsavedChanges({ preserveMergeUndo: true });
     btnUndoMerge.hidden = false;
@@ -1190,7 +1702,6 @@ function undoLastMerge() {
 }
 
 async function handleMergeNext() {
-    if (!MERGE_FEATURE_ENABLED) return;
     if (mergeState.step === "source") {
         if (!mergeState.incomingDb) {
             mergeFileInput.click();
@@ -1225,25 +1736,8 @@ btnMergeBack.addEventListener("click", () => {
 });
 btnMergeNext.addEventListener("click", handleMergeNext);
 mergeFileInput.addEventListener("change", async () => {
-    if (!MERGE_FEATURE_ENABLED) {
-        mergeFileInput.value = "";
-        return;
-    }
     const file = mergeFileInput.files[0];
-    if (!file) return;
-    try {
-        const incomingDb = await parseIncomingMergeDatabase(file);
-        mergeState.incomingDb = incomingDb;
-        mergeState.incomingFileName = file.name;
-        resetMergeScopes();
-        setMergeFeedback();
-        renderMergeModal();
-    } catch (error) {
-        console.error(error);
-        setMergeFeedback(error.message || "Unable to open the incoming database.");
-    } finally {
-        mergeFileInput.value = "";
-    }
+    await setIncomingMergeDatabaseFromFile(file);
 });
 mergeModal.addEventListener("click", event => {
     if (event.target === mergeModal) closeMergeModal();
