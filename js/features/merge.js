@@ -1,4 +1,6 @@
 const MERGE_TABLE_ORDER = ["Players", "Teams", "Staff", "Sponsors", "Tournaments"];
+const MERGE_FEATURE_ENABLED = false;
+const MERGE_DISABLED_MESSAGE = "Merge Beta is temporarily disabled while database safety fixes are tested.";
 const MERGE_PLAYER_GROUPS = [
     ["identity", "Identity and nationality"],
     ["team", "Teams and roster positions"],
@@ -52,6 +54,12 @@ function cloneMergeValue(value) {
 }
 
 function updateMergeAvailability() {
+    if (!MERGE_FEATURE_ENABLED) {
+        btnMergeDatabases.disabled = true;
+        btnMergeDatabases.title = MERGE_DISABLED_MESSAGE;
+        clearMergeUndo();
+        return;
+    }
     const loaded = Boolean(db?.tables && Object.keys(db.tables).length);
     btnMergeDatabases.disabled = !loaded;
     btnMergeDatabases.title = loaded
@@ -1033,6 +1041,10 @@ function renderMergeModal(options = {}) {
 }
 
 function openMergeModal() {
+    if (!MERGE_FEATURE_ENABLED) {
+        if (typeof setStatus === "function") setStatus(MERGE_DISABLED_MESSAGE, "warning");
+        return;
+    }
     if (!db?.tables || !Object.keys(db.tables).length) return;
     mergeState = createEmptyMergeState();
     mergeModal.hidden = false;
@@ -1178,6 +1190,7 @@ function undoLastMerge() {
 }
 
 async function handleMergeNext() {
+    if (!MERGE_FEATURE_ENABLED) return;
     if (mergeState.step === "source") {
         if (!mergeState.incomingDb) {
             mergeFileInput.click();
@@ -1212,6 +1225,10 @@ btnMergeBack.addEventListener("click", () => {
 });
 btnMergeNext.addEventListener("click", handleMergeNext);
 mergeFileInput.addEventListener("change", async () => {
+    if (!MERGE_FEATURE_ENABLED) {
+        mergeFileInput.value = "";
+        return;
+    }
     const file = mergeFileInput.files[0];
     if (!file) return;
     try {

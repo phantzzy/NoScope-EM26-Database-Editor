@@ -81,16 +81,10 @@ NoScope currently targets the database structure used by Esports Manager 2026. T
 - Update supported player statuses in bulk.
 - Validate ranges and recalculate Rating when changes are applied.
 
-### Database Merge (Beta)
+### Database Merge (Disabled)
 
-- Use the currently loaded database as Database A and a second uploaded `.emdb` as Database B.
-- Choose tables, player field groups, record types, transfers, and compatible missing columns.
-- Review additions, updates, identity changes, team transfers, and matching conflicts before applying them.
-- Search, filter, and paginate merge proposals.
-- Approve or skip individual records and field changes.
-- Compare Database A and Database B names when nicknames or identity fields changed.
-- Undo the most recently applied merge.
-- Preserve all Database A records; merges never delete records automatically.
+- Merge Beta is temporarily disabled while database safety fixes are tested.
+- Keep source `.emdb` packages backed up and save edited databases under a new filename.
 
 ### Validation and saving
 
@@ -203,18 +197,7 @@ These changes are not written to the source file until **Save as .emdb...** is u
 4. Drag existing roster cards to reorder or move them between sections.
 5. Save the team to update membership and roster positions where supported by the database schema.
 
-### 7. Merge another database
-
-1. Load the database that should remain the base.
-2. Select **Merge Beta** and choose the incoming `.emdb`.
-3. Choose the tables, field groups, and action types to compare.
-4. Build the review and inspect each proposed addition, update, transfer, rename, or conflict.
-5. Approve only the records and fields that should be applied.
-6. Apply the merge, review the result, and save it as a new `.emdb`.
-
-The loaded database is always Database A. The uploaded database is Database B. A merge never deletes Database A records automatically.
-
-### 8. Validate and save
+### 7. Validate and save
 
 - Use **Validate** to inspect the current database before saving.
 - Resolve duplicates or missing important values where possible.
@@ -224,7 +207,7 @@ The loaded database is always Database A. The uploaded database is Database B. A
 
 Keep the original database as a backup until the edited version has been tested in game.
 
-### 9. Work with images
+### 8. Work with images
 
 NoScope matches bundled images under `assets/custom/` using record identifiers and names. Country flags are rendered from the vendored `flag-icons` package.
 
@@ -237,7 +220,7 @@ The editor can:
 
 Remote downloads can fail when an image host blocks cross-origin browser requests. Automatic placement in the game's installation directory remains planned for the future desktop application.
 
-### 10. Use the built-in reference panels
+### 9. Use the built-in reference panels
 
 - **Guide** provides task-based instructions and screenshots.
 - **Library** provides bundled database downloads and source links.
