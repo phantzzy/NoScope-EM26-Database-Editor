@@ -44,6 +44,39 @@ const DEFAULT_LIBRARY_DATABASE = LIBRARY_DATABASES[0];
 const DEFAULT_DB_FILE = DEFAULT_LIBRARY_DATABASE.fileName;
 const CONTENT_CREATOR_META_STORAGE_KEY = "noscopeContentCreators:v1";
 const CONTENT_CREATOR_FILTER_KEY = "__noscopeContentCreator";
+const REMOTE_ASSET_MANIFEST_URL = "https://noscope-assets.pages.dev/manifest.json";
+const REMOTE_ASSET_MANIFEST_CACHE_KEY = "noscopeRemoteAssetManifest:v1";
+const EDITOR_REQUIRED_RULES = {
+    players: [
+        { label: "Nick", aliases: ["nickname", "nick"], page: "general" },
+        { label: "Country", aliases: ["country", "nationality"], page: "general" }
+    ],
+    teams: [
+        { label: "Nick", aliases: ["nick", "nickname"], page: "general" },
+        { label: "Name", aliases: ["name", "teamname"], page: "general" },
+        { label: "Country", aliases: ["country", "nationality"], page: "general" }
+    ],
+    sponsors: [
+        { label: "Company name", aliases: ["companyname", "sponsorname", "name"], page: "general" },
+        { label: "Tier", aliases: ["tier", "level"], page: "general" },
+        { label: "Type", aliases: ["type", "category"], page: "general" }
+    ],
+    staff: [
+        { label: "Name", aliases: ["name", "firstname", "forename"], page: "general" },
+        { label: "Surname", aliases: ["surname", "lastname"], page: "general" },
+        { label: "Role", aliases: ["role", "job", "type", "position"], page: "general" },
+        { label: "Country", aliases: ["country", "nationality"], page: "general" }
+    ],
+    staffs: [
+        { label: "Name", aliases: ["name", "firstname", "forename"], page: "general" },
+        { label: "Surname", aliases: ["surname", "lastname"], page: "general" },
+        { label: "Role", aliases: ["role", "job", "type", "position"], page: "general" },
+        { label: "Country", aliases: ["country", "nationality"], page: "general" }
+    ],
+    tournaments: [
+        { label: "Name", aliases: ["name", "tournamentname", "title"], page: "general" }
+    ]
+};
 
 // State
 let db = {
@@ -305,6 +338,10 @@ let dirtyBeforeNewRow = false;
 let pendingLeaveAction = null;
 let currentAssetKey = null;
 let pendingAsset = undefined;
+let remoteAssetManifest = null;
+let remoteAssetBaseUrl = "https://noscope-assets.pages.dev";
+const remoteAssetCacheRequests = new Set();
+let editorMissingRequiredColumns = new Set();
 let teamRosterOriginal = [];
 let teamRosterDraft = [];
 let teamRosterDragIndex = -1;
@@ -315,8 +352,22 @@ const SEARCH_RENDER_DELAY_MS = 120;
 const TEAM_ROSTER_FLIP_DELAY_MS = 1000;
 const PLAYER_RANDOM_AGE_MIN = 16;
 const PLAYER_RANDOM_AGE_MAX = 26;
+const desktopBridge = window.noscopeDesktop || null;
+const capabilities = {
+    desktop: Boolean(desktopBridge),
+    nativeFiles: Boolean(desktopBridge?.openEmdb && desktopBridge?.saveEmdb),
+    gameAssets: Boolean(desktopBridge?.saveClipboardImage),
+    cloudAssetInstall: Boolean(desktopBridge?.installCloudAssets),
+    assetFolders: Boolean(desktopBridge?.openCustomAssetFolder && desktopBridge?.chooseCustomAssetRoot),
+    remoteAssetCache: Boolean(desktopBridge?.cacheRemoteAsset),
+    updater: Boolean(desktopBridge?.checkForUpdates && desktopBridge?.downloadAndInstallUpdate)
+};
 
 // UI Elements
+const desktopTitlebar = document.getElementById("desktop-titlebar");
+const btnWindowMinimize = document.getElementById("btn-window-minimize");
+const btnWindowMaximize = document.getElementById("btn-window-maximize");
+const btnWindowClose = document.getElementById("btn-window-close");
 const btnOpen = document.getElementById("btn-open");
 const btnLoadDefault = document.getElementById("btn-load-default");
 const btnOpenFolder = document.getElementById("btn-open-folder");
@@ -345,9 +396,26 @@ const editorFieldCount = document.getElementById("editor-field-count");
 const assetEditor = document.getElementById("asset-editor");
 const assetPreview = document.getElementById("asset-preview");
 const assetFileInput = document.getElementById("asset-file-input");
+const btnPastePlayerImage = document.getElementById("btn-paste-player-image");
+const btnOpenPlayerImageFolder = document.getElementById("btn-open-player-image-folder");
+const btnChooseCustomAssetsFolder = document.getElementById("btn-choose-custom-assets-folder");
 const btnRemoveAsset = document.getElementById("btn-remove-asset");
+const assetActionStatus = document.getElementById("asset-action-status");
 const btnCopyAssetLink = document.getElementById("btn-copy-asset-link");
 const btnSubmitEdit = document.getElementById("btn-submit-edit");
+
+if (capabilities.desktop) {
+    document.body.classList.add("noscope-desktop");
+    desktopTitlebar?.removeAttribute("aria-hidden");
+    btnWindowMinimize?.addEventListener("click", () => desktopBridge.minimizeWindow?.());
+    btnWindowMaximize?.addEventListener("click", async () => {
+        const maximized = await desktopBridge.toggleMaximizeWindow?.();
+        btnWindowMaximize?.classList.toggle("is-maximized", Boolean(maximized));
+    });
+    btnWindowClose?.addEventListener("click", () => desktopBridge.closeWindow?.());
+} else {
+    document.body.classList.add("noscope-web");
+}
 
 // The rest of UI Elements inside editor-area will be handled by IDs directly
 const btnAddRow = document.getElementById("btn-add-row");
@@ -392,6 +460,15 @@ const changelogModalContent = document.getElementById("changelog-modal-content")
 const btnCloseChangelog = document.getElementById("btn-close-changelog");
 const btnCloseChangelogFooter = document.getElementById("btn-close-changelog-footer");
 const changelogReleaseCache = new Map();
+const btnUpdate = document.getElementById("btn-update");
+const updateModal = document.getElementById("update-modal");
+const updateStatusHeading = document.getElementById("update-status-heading");
+const updateStatusDetail = document.getElementById("update-status-detail");
+const updateStatusMessage = document.getElementById("update-status-message");
+const updateProgress = document.getElementById("update-progress");
+const btnCloseUpdate = document.getElementById("btn-close-update");
+const btnCloseUpdateFooter = document.getElementById("btn-close-update-footer");
+const btnRunUpdate = document.getElementById("btn-run-update");
 const guideImageModal = document.getElementById("guide-image-modal");
 const guideImagePreview = document.getElementById("guide-image-preview");
 const guideImagePreviewCaption = document.getElementById("guide-image-preview-caption");
@@ -404,6 +481,10 @@ const btnAssets = document.getElementById("btn-assets");
 const assetsModal = document.getElementById("assets-modal");
 const btnCloseAssets = document.getElementById("btn-close-assets");
 const btnCloseAssetsFooter = document.getElementById("btn-close-assets-footer");
+const btnInstallCloudAssets = document.getElementById("btn-install-cloud-assets");
+const cloudAssetsStatus = document.getElementById("cloud-assets-status");
+const cloudAssetsProgress = document.getElementById("cloud-assets-progress");
+const cloudAssetsReport = document.getElementById("cloud-assets-report");
 const compareModal = document.getElementById("compare-modal");
 const comparePlayerOne = document.getElementById("compare-player-one");
 const comparePlayerTwo = document.getElementById("compare-player-two");
@@ -416,18 +497,47 @@ const compareSelectionErrorModal = document.getElementById("compare-selection-er
 const compareSelectionErrorMessage = document.getElementById("compare-selection-error-message");
 const btnCloseCompareSelectionError = document.getElementById("btn-close-compare-selection-error");
 const confirmModal = document.getElementById("confirm-modal");
+const confirmModalContext = confirmModal.querySelector(".confirm-modal-copy .eyebrow");
+const confirmModalTitle = document.getElementById("confirm-modal-title");
 const confirmModalMessage = document.getElementById("confirm-modal-message");
 const btnCancelConfirm = document.getElementById("btn-cancel-confirm");
 const btnAcceptConfirm = document.getElementById("btn-accept-confirm");
+const appAlertModal = document.getElementById("app-alert-modal");
+const appAlertContext = document.getElementById("app-alert-context");
+const appAlertTitle = document.getElementById("app-alert-title");
+const appAlertMessage = document.getElementById("app-alert-message");
+const btnCloseAppAlert = document.getElementById("btn-close-app-alert");
 const leaveModal = document.getElementById("leave-modal");
 const btnSaveBeforeLeave = document.getElementById("btn-save-before-leave");
 const btnExitWithoutSaving = document.getElementById("btn-exit-without-saving");
 let resolveConfirmation = null;
+let resolveAppAlert = null;
 const librarySummaryCache = new Map();
 let activeGuideImageTrigger = null;
+let latestUpdateInfo = null;
+let updateBusy = false;
 
-function requestConfirmation(message) {
-    confirmModalMessage.textContent = message;
+function applyCapabilityVisibility() {
+    document.querySelectorAll("[data-desktop-capability]").forEach(element => {
+        const capability = element.dataset.desktopCapability;
+        element.hidden = !capabilities[capability];
+    });
+}
+
+applyCapabilityVisibility();
+
+function requestConfirmation(messageOrOptions) {
+    const options = typeof messageOrOptions === "string"
+        ? { message: messageOrOptions }
+        : messageOrOptions || {};
+    confirmModalContext.textContent = options.context || "Confirm action";
+    confirmModalTitle.textContent = options.title || "REMOVE ENTRY?";
+    confirmModalMessage.textContent = options.message || "This entry will be permanently removed from the database.";
+    btnCancelConfirm.textContent = options.cancelLabel || "Cancel";
+    btnAcceptConfirm.textContent = options.acceptLabel || "Remove";
+    const useDanger = options.danger !== false;
+    btnAcceptConfirm.classList.toggle("btn-danger", useDanger);
+    btnAcceptConfirm.classList.toggle("btn-primary", !useDanger);
     confirmModal.hidden = false;
     btnCancelConfirm.focus();
     return new Promise(resolve => {
@@ -450,6 +560,33 @@ confirmModal.addEventListener("click", event => {
 });
 document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !confirmModal.hidden) closeConfirmation(false);
+});
+
+function showAppAlert({ context = "NoScope notice", title = "SOMETHING WENT WRONG", message }) {
+    appAlertContext.textContent = context;
+    appAlertTitle.textContent = title;
+    appAlertMessage.textContent = message;
+    appAlertModal.hidden = false;
+    btnCloseAppAlert.focus();
+    return new Promise(resolve => {
+        resolveAppAlert = resolve;
+    });
+}
+
+function closeAppAlert() {
+    if (appAlertModal.hidden) return;
+    appAlertModal.hidden = true;
+    const resolve = resolveAppAlert;
+    resolveAppAlert = null;
+    if (resolve) resolve();
+}
+
+btnCloseAppAlert.addEventListener("click", closeAppAlert);
+appAlertModal.addEventListener("click", event => {
+    if (event.target === appAlertModal) closeAppAlert();
+});
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !appAlertModal.hidden) closeAppAlert();
 });
 
 function markUnsavedChanges(options = {}) {
@@ -1037,8 +1174,229 @@ document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !changelogModal.hidden) closeChangelogPanel();
 });
 
+function setUpdateStatus({ heading, detail, message, tone = "" }) {
+    if (heading !== undefined) updateStatusHeading.textContent = heading;
+    if (detail !== undefined) updateStatusDetail.textContent = detail;
+    if (message !== undefined) updateStatusMessage.textContent = message;
+    updateStatusMessage.dataset.tone = tone;
+}
+
+function setUpdateProgress(progress) {
+    const total = Number(progress?.total) || 0;
+    const percent = Number(progress?.percent) || 0;
+    updateProgress.hidden = !total && percent <= 0;
+    updateProgress.querySelector("i").style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+function setUpdateBusy(busy, label = "") {
+    updateBusy = busy;
+    btnUpdate.disabled = busy;
+    btnRunUpdate.disabled = busy;
+    if (label) btnRunUpdate.textContent = label;
+}
+
+function openUpdatePanel() {
+    updateModal.hidden = false;
+    if (!capabilities.updater) {
+        btnRunUpdate.disabled = true;
+        setUpdateStatus({
+            heading: "Desktop app required",
+            detail: "Updates are only available in the installed NoScope app.",
+            message: "Open the desktop version to check GitHub releases.",
+            tone: "error"
+        });
+    } else if (!latestUpdateInfo) {
+        setUpdateStatus({
+            heading: "Ready to check for updates",
+            detail: "NoScope checks the latest GitHub release.",
+            message: "Click check to compare your installed app with the newest installer.",
+            tone: ""
+        });
+        btnRunUpdate.textContent = "Check now";
+        btnRunUpdate.disabled = false;
+        setUpdateProgress({ total: 0, percent: 0 });
+    }
+    btnCloseUpdate.focus();
+}
+
+function closeUpdatePanel() {
+    if (updateBusy) return;
+    updateModal.hidden = true;
+}
+
+async function checkForUpdates() {
+    if (!capabilities.updater) return;
+    latestUpdateInfo = null;
+    setUpdateBusy(true, "Checking...");
+    setUpdateProgress({ total: 0, percent: 0 });
+    setUpdateStatus({
+        heading: "Checking for updates",
+        detail: "Contacting GitHub Releases...",
+        message: "Comparing your installed app with the newest published installer.",
+        tone: ""
+    });
+
+    try {
+        const result = await desktopBridge.checkForUpdates();
+        if (result?.error) throw new Error(result.error);
+
+        latestUpdateInfo = result;
+        if (result.noRelease) {
+            setUpdateStatus({
+                heading: "No update release published",
+                detail: `Installed version: v${result.currentVersion}`,
+                message: "GitHub does not have a public latest release yet. Publish a release with NoScope-Installer.exe to enable in-app updates.",
+                tone: "warning"
+            });
+            btnRunUpdate.textContent = "Check again";
+            return;
+        }
+
+        if (!result.hasUpdate) {
+            setUpdateStatus({
+                heading: "No update available",
+                detail: `Installed version: v${result.currentVersion}`,
+                message: `You're already on the latest published version, v${result.latestVersion}.`,
+                tone: "success"
+            });
+            btnRunUpdate.textContent = "Check again";
+            return;
+        }
+
+        if (!result.canInstall) {
+            setUpdateStatus({
+                heading: `v${result.latestVersion} is available`,
+                detail: result.releaseName || "Latest GitHub release",
+                message: "The release is newer, but it does not include a NoScope installer asset yet.",
+                tone: "warning"
+            });
+            btnRunUpdate.textContent = "Check again";
+            return;
+        }
+
+        setUpdateStatus({
+            heading: `v${result.latestVersion} is available`,
+            detail: `Installed version: v${result.currentVersion}`,
+            message: `${result.assetName || "NoScope installer"} is ready to download and run.`,
+            tone: "warning"
+        });
+        btnRunUpdate.textContent = "Install update";
+    } catch (error) {
+        console.error("Unable to check for updates", error);
+        setUpdateStatus({
+            heading: "Update check failed",
+            detail: "NoScope could not reach the latest GitHub release.",
+            message: error.message || "Try again after checking your connection.",
+            tone: "error"
+        });
+        btnRunUpdate.textContent = "Try again";
+    } finally {
+        setUpdateBusy(false);
+    }
+}
+
+async function installLatestUpdate() {
+    if (!latestUpdateInfo?.downloadUrl) {
+        await checkForUpdates();
+        return;
+    }
+
+    if (hasActualUnsavedChanges()) {
+        const proceed = await requestConfirmation({
+            context: "App update",
+            title: "SAVE BEFORE UPDATING?",
+            message: "NoScope needs to close to run the updater. Save your current .emdb first if you want to keep unsaved database changes.",
+            cancelLabel: "Cancel",
+            acceptLabel: "Update anyway",
+            danger: false
+        });
+        if (!proceed) return;
+    }
+
+    const confirmed = await requestConfirmation({
+        context: "App update",
+        title: `INSTALL v${latestUpdateInfo.latestVersion}?`,
+        message: "NoScope will download the latest installer, start it, and close this app so Windows can replace the installed files.",
+        cancelLabel: "Cancel",
+        acceptLabel: "Download update",
+        danger: false
+    });
+    if (!confirmed) return;
+
+    setUpdateBusy(true, "Downloading...");
+    setUpdateProgress({ total: latestUpdateInfo.assetSize || 1, percent: 0 });
+    setUpdateStatus({
+        heading: `Downloading v${latestUpdateInfo.latestVersion}`,
+        detail: latestUpdateInfo.assetName || "NoScope installer",
+        message: "Keep NoScope open until the installer starts.",
+        tone: ""
+    });
+
+    const unsubscribe = desktopBridge.onUpdateDownloadProgress?.(progress => {
+        setUpdateProgress(progress);
+        const total = Number(progress?.total) || 0;
+        const downloaded = Number(progress?.downloaded) || 0;
+        const percent = Number(progress?.percent) || 0;
+        const mbDone = downloaded ? (downloaded / 1024 / 1024).toFixed(1) : "0.0";
+        const mbTotal = total ? ` / ${(total / 1024 / 1024).toFixed(1)} MB` : " MB";
+        setUpdateStatus({
+            heading: `Downloading v${latestUpdateInfo.latestVersion}`,
+            detail: `${percent || 0}% complete`,
+            message: `${mbDone}${mbTotal} downloaded.`,
+            tone: ""
+        });
+    });
+
+    try {
+        const result = await desktopBridge.downloadAndInstallUpdate({
+            downloadUrl: latestUpdateInfo.downloadUrl,
+            assetName: latestUpdateInfo.assetName
+        });
+        unsubscribe?.();
+        if (result?.error) throw new Error(result.error);
+        setUpdateStatus({
+            heading: "Starting installer",
+            detail: "NoScope will close now.",
+            message: "The updater will open in a moment.",
+            tone: "success"
+        });
+        setUpdateProgress({ total: 1, percent: 100 });
+    } catch (error) {
+        unsubscribe?.();
+        console.error("Unable to install update", error);
+        setUpdateStatus({
+            heading: "Update failed",
+            detail: "The installer could not be downloaded or started.",
+            message: error.message || "Try again from the Update button.",
+            tone: "error"
+        });
+        setUpdateBusy(false, "Try again");
+    }
+}
+
+btnUpdate.addEventListener("click", () => {
+    openUpdatePanel();
+    if (capabilities.updater && !latestUpdateInfo) checkForUpdates();
+});
+btnRunUpdate.addEventListener("click", () => {
+    if (latestUpdateInfo?.hasUpdate && latestUpdateInfo?.canInstall) installLatestUpdate();
+    else checkForUpdates();
+});
+btnCloseUpdate.addEventListener("click", closeUpdatePanel);
+btnCloseUpdateFooter.addEventListener("click", closeUpdatePanel);
+updateModal.addEventListener("click", event => {
+    if (event.target === updateModal) closeUpdatePanel();
+});
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !updateModal.hidden) closeUpdatePanel();
+});
+
 function openAssetsPanel() {
     assetsModal.hidden = false;
+    if (capabilities.cloudAssetInstall && !cloudAssetsStatus.dataset.tone) {
+        btnInstallCloudAssets.disabled = false;
+        cloudAssetsStatus.textContent = "Uses your configured Esports Manager CustomAssets folder.";
+    }
     btnCloseAssets.focus();
 }
 
@@ -1055,6 +1413,116 @@ assetsModal.addEventListener("click", event => {
 document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !assetsModal.hidden) closeAssetsPanel();
 });
+
+function setCloudAssetsStatus(message, tone = "") {
+    cloudAssetsStatus.textContent = message;
+    cloudAssetsStatus.dataset.tone = tone;
+}
+
+function setCloudAssetsProgress(progress) {
+    const total = Number(progress?.total) || 0;
+    const completed = Number(progress?.completed) || 0;
+    const percent = total ? Math.max(0, Math.min(100, completed / total * 100)) : 0;
+    cloudAssetsProgress.hidden = !total;
+    cloudAssetsProgress.querySelector("i").style.width = `${percent}%`;
+}
+
+function clearCloudAssetsReport() {
+    cloudAssetsReport.hidden = true;
+    cloudAssetsReport.open = false;
+    cloudAssetsReport.replaceChildren();
+}
+
+function renderCloudAssetsFailureReport(result) {
+    clearCloudAssetsReport();
+    const failures = Array.isArray(result?.failures) ? result.failures : [];
+    if (!failures.length) return;
+
+    const failedCount = Number(result?.failed) || failures.length;
+    const summary = document.createElement("summary");
+    summary.textContent = `${failedCount} asset${failedCount === 1 ? "" : "s"} failed`;
+
+    const list = document.createElement("ul");
+    failures.forEach(failure => {
+        const item = document.createElement("li");
+        const folder = failure?.folder || "CustomAssets";
+        const fileName = failure?.fileName || "Unknown file";
+        const reason = failure?.error || "Unknown error";
+        item.textContent = `${folder}/${fileName} - ${reason}`;
+        list.appendChild(item);
+    });
+
+    cloudAssetsReport.append(summary, list);
+    cloudAssetsReport.hidden = false;
+}
+
+async function installCloudAssets() {
+    if (!capabilities.cloudAssetInstall) {
+        await showAppAlert({
+            context: "Asset install",
+            title: "DESKTOP APP REQUIRED",
+            message: "Installing assets into the game folder requires the NoScope desktop app."
+        });
+        return;
+    }
+
+    const rootInfo = await desktopBridge.getCustomAssetRoot?.();
+    const confirmed = await requestConfirmation({
+        context: "Asset install",
+        title: "INSTALL CLOUD ASSETS?",
+        message: `NoScope will download the shared Cloudflare CustomAssets library and write it into ${rootInfo?.rootPath || "your configured game CustomAssets folder"}. Existing files with the same names will be replaced.`,
+        cancelLabel: "Cancel",
+        acceptLabel: "Install assets",
+        danger: false
+    });
+    if (!confirmed) return;
+
+    btnInstallCloudAssets.disabled = true;
+    btnInstallCloudAssets.textContent = "Installing...";
+    setCloudAssetsStatus("Preparing Cloudflare asset install...", "");
+    setCloudAssetsProgress({ total: 0, completed: 0 });
+    clearCloudAssetsReport();
+    const unsubscribe = desktopBridge.onCloudAssetInstallProgress?.(progress => {
+        setCloudAssetsProgress(progress);
+        const total = Number(progress?.total) || 0;
+        const completed = Number(progress?.completed) || 0;
+        const suffix = progress?.fileName ? ` (${progress.folder}/${progress.fileName})` : "";
+        setCloudAssetsStatus(`Installing ${completed}/${total}${suffix}`, "");
+    });
+
+    try {
+        const result = await desktopBridge.installCloudAssets();
+        unsubscribe?.();
+        if (result?.error) throw new Error(result.error);
+
+        setCloudAssetsProgress({ total: result.total, completed: result.total });
+        if (result.failed) {
+            const noun = result.failed === 1 ? "asset" : "assets";
+            setCloudAssetsStatus(`Installed ${result.installed}/${result.total} assets. ${result.failed} ${noun} failed; open the report below.`, "warning");
+            renderCloudAssetsFailureReport(result);
+        } else {
+            setCloudAssetsStatus(`Installed ${result.installed}/${result.total} assets to ${result.rootPath}.`, "success");
+            clearCloudAssetsReport();
+        }
+        await loadRemoteAssetManifest();
+        if (activeTab) renderTable(activeTab);
+    } catch (error) {
+        unsubscribe?.();
+        console.error("Unable to install cloud assets", error);
+        setCloudAssetsStatus("Cloud asset install failed.", "error");
+        clearCloudAssetsReport();
+        await showAppAlert({
+            context: "Asset install",
+            title: "INSTALL FAILED",
+            message: error.message || "NoScope could not install the Cloudflare assets."
+        });
+    } finally {
+        btnInstallCloudAssets.disabled = false;
+        btnInstallCloudAssets.textContent = "Install all";
+    }
+}
+
+btnInstallCloudAssets.addEventListener("click", installCloudAssets);
 
 // Crypto Helpers
 function hexToUint8Array(hexString) {
@@ -1122,7 +1590,21 @@ async function encryptEMDB(zipArrayBuffer) {
 
 // Open EMDB
 btnOpen.addEventListener("click", () => {
-    requestUnsavedChangesAction(() => fileInput.click());
+    requestUnsavedChangesAction(async () => {
+        if (!capabilities.nativeFiles) {
+            fileInput.click();
+            return;
+        }
+
+        const result = await desktopBridge.openEmdb();
+        if (result?.canceled) return;
+        if (!result?.data) {
+            alert("Unable to read the selected database.");
+            return;
+        }
+
+        await loadEMDBFile(new File([result.data], result.fileName || "database.emdb", { type: "application/octet-stream" }));
+    });
 });
 
 async function loadEMDBFile(file, options = {}) {
@@ -3732,6 +4214,55 @@ function setContentCreatorPlayer(tableName, row, rowIndex, enabled, previousKey 
     persistContentCreatorKeys();
 }
 
+function normalizeRemoteAssetManifest(manifest) {
+    if (!manifest || typeof manifest !== "object") return null;
+    const normalized = {};
+    ["Players", "Teams", "Sponsors", "Staffs", "Tournaments"].forEach(folder => {
+        const entries = manifest[folder];
+        if (!entries || typeof entries !== "object") return;
+        normalized[folder] = {};
+        Object.entries(entries).forEach(([key, value]) => {
+            if (typeof value === "string") normalized[folder][String(key).normalize("NFKC").toLowerCase()] = value;
+        });
+    });
+
+    if (!Object.keys(normalized).length) return null;
+    return {
+        version: typeof manifest.version === "string" ? manifest.version : "",
+        baseUrl: typeof manifest.baseUrl === "string" ? manifest.baseUrl : remoteAssetBaseUrl,
+        assets: normalized
+    };
+}
+
+function applyRemoteAssetManifest(manifest) {
+    const normalized = normalizeRemoteAssetManifest(manifest);
+    if (!normalized) return false;
+    remoteAssetManifest = normalized.assets;
+    remoteAssetBaseUrl = normalized.baseUrl.replace(/\/+$/, "") || remoteAssetBaseUrl;
+    return true;
+}
+
+async function loadRemoteAssetManifest() {
+    try {
+        const cached = JSON.parse(localStorage.getItem(REMOTE_ASSET_MANIFEST_CACHE_KEY) || "null");
+        applyRemoteAssetManifest(cached);
+    } catch {
+        localStorage.removeItem(REMOTE_ASSET_MANIFEST_CACHE_KEY);
+    }
+
+    try {
+        const response = await fetch(`${REMOTE_ASSET_MANIFEST_URL}?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Remote manifest request failed (${response.status})`);
+        const manifest = await response.json();
+        if (!applyRemoteAssetManifest(manifest)) throw new Error("Remote manifest was not usable.");
+        localStorage.setItem(REMOTE_ASSET_MANIFEST_CACHE_KEY, JSON.stringify(manifest));
+        if (activeTab) renderTable(activeTab);
+        if (!editModal.hidden && editingRowIndex >= 0) prepareAssetEditor();
+    } catch (error) {
+        console.warn("Unable to load remote asset manifest", error);
+    }
+}
+
 function createContentCreatorBadge(extraClass = "") {
     const badge = document.createElement("span");
     badge.className = `content-creator-badge${extraClass ? ` ${extraClass}` : ""}`;
@@ -3739,6 +4270,74 @@ function createContentCreatorBadge(extraClass = "") {
     badge.setAttribute("aria-label", "Content creator");
     badge.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h16v11.5L16.5 19H13l-2.8 2.5V19H5V3Zm2.5 2.5v11h5.2v1.8l2-1.8h2.8l1-1V5.5h-11Zm3.2 3.1h2v5.1h-2V8.6Zm4.6 0h2v5.1h-2V8.6Z"/></svg>';
     return badge;
+}
+
+function addAssetCandidate(candidates, candidate) {
+    if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
+}
+
+function getAssetLookupValue(value) {
+    return String(value || "").trim().normalize("NFKC").toLowerCase();
+}
+
+function isAmbiguousPlayerAssetLookup(table, fieldName, value) {
+    const lookupKey = getAssetLookupValue(value);
+    if (!lookupKey) return false;
+    const normalizedField = normalizeFieldName(fieldName);
+    const ambiguousAliasGroups = [
+        ["nickname", "nick"],
+        ["name", "firstname", "forename"],
+        ["surname", "lastname"]
+    ];
+    const aliases = ambiguousAliasGroups.find(group => group.includes(normalizedField));
+    if (!aliases) return false;
+    const indexes = table.header
+        .map((header, index) => ({ index, name: normalizeFieldName(header) }))
+        .filter(field => aliases.includes(field.name))
+        .map(field => field.index);
+    if (!indexes.length) return false;
+    let matches = 0;
+    table.rows.forEach(row => {
+        if (indexes.some(index => getAssetLookupValue(row[index]) === lookupKey)) matches += 1;
+    });
+    return matches > 1;
+}
+
+function getRemoteAssetUrl(folder, lookupKey) {
+    const relativePath = remoteAssetManifest?.[folder]?.[lookupKey];
+    if (!relativePath) return "";
+
+    try {
+        return new URL(relativePath, `${remoteAssetBaseUrl}/`).href;
+    } catch {
+        return "";
+    }
+}
+
+function isRemoteAssetUrl(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.origin === new URL(remoteAssetBaseUrl).origin;
+    } catch {
+        return false;
+    }
+}
+
+function cacheRemoteAssetFromUrl(url) {
+    if (!capabilities.remoteAssetCache || !isRemoteAssetUrl(url)) return;
+    if (remoteAssetCacheRequests.has(url)) return;
+    remoteAssetCacheRequests.add(url);
+    try {
+        const parsed = new URL(url);
+        const [folder, ...rest] = parsed.pathname.replace(/^\/+/, "").split("/");
+        const fileName = decodeURIComponent(rest.pop() || "");
+        if (!folder || !fileName) return;
+        desktopBridge.cacheRemoteAsset({ folder, fileName, url }).catch(error => {
+            console.warn("Unable to cache remote asset", error);
+        });
+    } catch (error) {
+        console.warn("Unable to parse remote asset URL", error);
+    }
 }
 
 function getBundledAssetCandidates(tableName, row) {
@@ -3753,28 +4352,32 @@ function getBundledAssetCandidates(tableName, row) {
         tournaments: "Tournaments"
     };
     const fieldPriority = normalizedTable === "sponsors"
-        ? ["id", "sponsorid", "internalid", "name"]
+        ? ["num", "id", "sponsorid", "internalid", "companyname", "sponsorname", "name", "brand", "title"]
         : normalizedTable === "players"
-            ? ["nickname", "nick", "internalid", "name", "firstname"]
+            ? ["internalid", "playerid", "id", "nickname", "nick", "name", "firstname", "forename"]
             : ["name", "nickname", "nick", "internalid", "id"];
     const values = [];
     fieldPriority.forEach(fieldName => {
         const index = table.header.findIndex(label => normalizeFieldName(label) === fieldName);
         const value = index >= 0 ? String(row[index] || "").trim() : "";
-        if (value && !values.includes(value)) values.push(value);
+        if (!value) return;
+        if (normalizedTable === "players" && isAmbiguousPlayerAssetLookup(table, fieldName, value)) return;
+        if (!values.includes(value)) values.push(value);
     });
     const folder = folderMap[normalizedTable];
     if (!folder) return [];
     const manifest = window.NOSCOPE_ASSETS?.[folder] || {};
     const candidates = [];
     values.forEach(value => {
-        const lookupKey = value.normalize("NFKC").toLowerCase();
+        const lookupKey = getAssetLookupValue(value);
         const exactAsset = manifest[lookupKey];
-        if (exactAsset && !candidates.includes(exactAsset)) candidates.push(exactAsset);
+        addAssetCandidate(candidates, exactAsset);
         const conventionalPath = `assets/custom/${folder}/${encodeURIComponent(value)}.png`;
-        if (!candidates.includes(conventionalPath)) candidates.push(conventionalPath);
+        addAssetCandidate(candidates, conventionalPath);
+        addAssetCandidate(candidates, getRemoteAssetUrl(folder, lookupKey));
+        addAssetCandidate(candidates, getRemoteAssetUrl(folder, normalizeFieldName(value)));
     });
-    if (["players", "staff", "staffs"].includes(normalizedTable)) candidates.push("assets/ui/player-placeholder.png");
+    if (["players", "staff", "staffs"].includes(normalizedTable)) addAssetCandidate(candidates, "assets/ui/player-placeholder.png");
     return candidates;
 }
 
@@ -3783,7 +4386,10 @@ function loadFirstAvailableImage(container, candidates, alt = "") {
     let index = 0;
     const image = document.createElement("img");
     image.alt = alt;
-    image.addEventListener("load", () => container.replaceChildren(image), { once: true });
+    image.addEventListener("load", () => {
+        cacheRemoteAssetFromUrl(image.src);
+        container.replaceChildren(image);
+    }, { once: true });
     image.addEventListener("error", () => {
         index += 1;
         if (index < candidates.length) image.src = candidates[index];
@@ -3814,6 +4420,7 @@ async function loadCardAsset(container, key, bundledCandidates = []) {
 function openEditor(rowIndex, isNew = false) {
     editingRowIndex = rowIndex;
     editingIsNew = isNew;
+    editorMissingRequiredColumns = new Set();
     const table = db.tables[activeTab];
     const row = table.rows[rowIndex];
     const isPlayerEditor = activeTab.toLowerCase() === "players";
@@ -3859,7 +4466,17 @@ async function prepareAssetEditor() {
     document.getElementById("asset-editor-title").textContent = titles[normalizedTable];
     const assetHelp = assetEditor.querySelector(".asset-editor-copy p");
     const matchingNames = normalizedTable === "players" ? "Internal ID or nickname" : "name or Internal ID";
-    assetHelp.textContent = `Use the bundled CustomAssets image or choose a local override. Files are matched using ${matchingNames}.`;
+    const assetCopy = capabilities.gameAssets
+        ? `Paste an image directly into the game's CustomAssets folder, or choose a browser-only override. Files are matched using ${matchingNames}.`
+        : `Use the bundled CustomAssets image or choose a local override. Files are matched using ${matchingNames}.`;
+    assetHelp.textContent = normalizedTable === "sponsors"
+        ? `${assetCopy} Sponsor logos do not appear on in-game shirts; that shirt area will remain blank.`
+        : assetCopy;
+    const assetFolder = getCustomAssetFolderForTable(activeTab);
+    btnPastePlayerImage.hidden = !(assetFolder && capabilities.gameAssets);
+    btnOpenPlayerImageFolder.hidden = !(assetFolder && capabilities.assetFolders);
+    btnChooseCustomAssetsFolder.hidden = !(assetFolder && capabilities.assetFolders);
+    setAssetActionStatus("");
     assetPreview.innerHTML = "<span>No image</span>";
     btnRemoveAsset.disabled = true;
     try {
@@ -3887,6 +4504,84 @@ function showAssetPreview(blob) {
 
 function normalizeFieldName(label) {
     return String(label || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function getEditorRequiredRules(tableName = activeTab) {
+    return EDITOR_REQUIRED_RULES[String(tableName || "").toLowerCase()] || [];
+}
+
+function getTableFieldByAliases(table, aliases) {
+    const normalizedAliases = aliases.map(alias => normalizeFieldName(alias));
+    const index = table.header.findIndex(header => normalizedAliases.includes(normalizeFieldName(header)));
+    return index >= 0 ? { index, label: table.header[index] } : null;
+}
+
+function getRequiredRuleForColumn(tableName, table, columnIndex) {
+    return getEditorRequiredRules(tableName).find(rule => getTableFieldByAliases(table, rule.aliases)?.index === columnIndex) || null;
+}
+
+function addFieldNote(field, text, className = "") {
+    const note = document.createElement("small");
+    note.className = `field-note ${className}`.trim();
+    note.textContent = text;
+    field.appendChild(note);
+    return note;
+}
+
+function decorateEditorFieldRequirement(field, caption, control, tableName, table, columnIndex) {
+    const rule = getRequiredRuleForColumn(tableName, table, columnIndex);
+    if (!rule) return;
+    field.classList.add("is-required");
+    if (editorMissingRequiredColumns.has(columnIndex)) field.classList.add("is-missing-required");
+    const badge = document.createElement("em");
+    badge.className = "required-badge";
+    badge.textContent = "Required";
+    caption.appendChild(badge);
+    if (control && !control.readOnly) control.setAttribute("aria-required", "true");
+}
+
+function focusEditorRequiredField(table, rule) {
+    const field = getTableFieldByAliases(table, rule.aliases);
+    if (!field) return;
+    const isTabbedEditor = ["players", "staff", "staffs", "teams"].includes(activeTab.toLowerCase());
+    if (isTabbedEditor) {
+        editorPage = rule.page || "general";
+        if (editorPage === "stats") statsPage = getFieldSection(field.label) || "gameplay";
+        updateEditorNavigation();
+        renderEditorFields();
+    }
+    requestAnimationFrame(() => {
+        const control = editFormFields.querySelector(`[data-column="${field.index}"]`);
+        control?.closest(".form-field,.skill-control")?.classList.add("is-missing-required");
+        if (control?.type !== "hidden") {
+            control.focus();
+            if (typeof control.select === "function") control.select();
+            return;
+        }
+        control?.closest(".form-field,.skill-control")?.querySelector("input:not([type='hidden']), select, textarea, button")?.focus();
+    });
+}
+
+async function validateRequiredEditorFields(table) {
+    const missing = [];
+    const missingColumns = new Set();
+    getEditorRequiredRules(activeTab).forEach(rule => {
+        const field = getTableFieldByAliases(table, rule.aliases);
+        if (!field) return;
+        const value = String(editDraft[field.index] ?? "").trim();
+        if (value) return;
+        missing.push(rule);
+        missingColumns.add(field.index);
+    });
+    editorMissingRequiredColumns = missingColumns;
+    if (!missing.length) return true;
+    focusEditorRequiredField(table, missing[0]);
+    await showAppAlert({
+        context: "Required fields",
+        title: "CAN'T SAVE YET",
+        message: `Fill in ${missing.map(rule => rule.label).join(", ")} before saving this ${activeTab.replace(/s$/i, "").toLowerCase()}.`
+    });
+    return false;
 }
 
 function getFieldSection(label) {
@@ -3949,9 +4644,12 @@ function createContentCreatorToggle() {
 function getAssetDisplayName() {
     const table = db.tables[activeTab];
     if (!table) return "";
-    const preferredNames = activeTab.toLowerCase() === "players"
-        ? ["nickname", "nick"]
-        : ["name", "companyname", "tournamentname", "nickname", "nick", "title"];
+    const normalizedTable = activeTab.toLowerCase();
+    const preferredNames = normalizedTable === "players"
+        ? ["internalid", "playerid", "id", "nickname", "nick", "name"]
+        : normalizedTable === "sponsors"
+            ? ["num", "id", "sponsorid", "internalid", "companyname", "sponsorname", "name", "brand", "title"]
+            : ["name", "companyname", "tournamentname", "nickname", "nick", "title", "internalid", "id"];
     for (const preferred of preferredNames) {
         const index = table.header.findIndex(label => normalizeFieldName(label) === preferred);
         if (index >= 0 && String(editDraft[index] || "").trim()) return String(editDraft[index]).trim();
@@ -3959,11 +4657,47 @@ function getAssetDisplayName() {
     return "";
 }
 
+function getCustomAssetFolderForTable(tableName = activeTab) {
+    const folderMap = {
+        players: "Players",
+        teams: "Teams",
+        sponsors: "Sponsors",
+        staff: "Staffs",
+        staffs: "Staffs",
+        tournaments: "Tournaments"
+    };
+    return folderMap[String(tableName || "").toLowerCase()] || "";
+}
+
+function cleanAssetFileBaseName(value) {
+    return String(value || "").trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/g, "");
+}
+
 function makePlayerImageFilename(nickname, file) {
-    const cleanNickname = nickname.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/g, "");
+    const cleanNickname = cleanAssetFileBaseName(nickname);
     const extensionByType = { "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
     const sourceExtension = file.name?.match(/\.(png|jpe?g|webp)$/i)?.[0].toLowerCase();
     return `${cleanNickname}${extensionByType[file.type] || sourceExtension || ".png"}`;
+}
+
+function makePlayerPngFilename(nickname) {
+    return `${cleanAssetFileBaseName(nickname) || "player-image"}.png`;
+}
+
+function setAssetActionStatus(message, tone = "") {
+    assetActionStatus.textContent = message;
+    assetActionStatus.hidden = !message;
+    assetActionStatus.dataset.tone = tone;
+}
+
+function rememberRuntimeAsset(folder, displayName, fileName, assetPath) {
+    if (!window.NOSCOPE_ASSETS) window.NOSCOPE_ASSETS = {};
+    if (!window.NOSCOPE_ASSETS[folder]) window.NOSCOPE_ASSETS[folder] = {};
+    const cacheBustedPath = `${assetPath}?v=${Date.now()}`;
+    const rawKey = String(displayName || "").normalize("NFKC").toLowerCase();
+    const fileKey = fileName.replace(/\.png$/i, "").normalize("NFKC").toLowerCase();
+    if (rawKey) window.NOSCOPE_ASSETS[folder][rawKey] = cacheBustedPath;
+    if (fileKey) window.NOSCOPE_ASSETS[folder][fileKey] = cacheBustedPath;
 }
 
 function downloadPlayerImage(file, filename) {
@@ -4003,7 +4737,11 @@ async function downloadEntryImageFromUrl(imageUrl, status) {
     } catch (error) {
         console.error("Unable to download entry image", error);
         status.textContent = "Download failed. The image host may block browser downloads.";
-        alert(`Unable to download the image from that URL. ${error.message}`);
+        await showAppAlert({
+            context: "Image download",
+            title: "IMAGE DOWNLOAD FAILED",
+            message: `NoScope could not download that image. ${error.message}`
+        });
     }
 }
 
@@ -4188,7 +4926,15 @@ function renderEditorFields() {
             });
             input.value = currentValue;
         }
+        decorateEditorFieldRequirement(field, caption, input, activeTab, table, index);
         field.append(caption, input);
+        if (activeTab.toLowerCase() === "tournaments" && normalizedLabel === "id") {
+            input.placeholder = "Leave unchanged unless needed";
+            addFieldNote(field, "Internal tournament record ID. Leave it unchanged unless you know the game expects a specific value.");
+        }
+        if (activeTab.toLowerCase() === "tournaments" && normalizedLabel === "cupid") {
+            addFieldNote(field, "This is the cup ID that will appear in the game. By default it matches the tournament name. Don't change it unless you know what you're doing.");
+        }
         editFormFields.appendChild(field);
         if (!isTabbedEditor && isImageUrlField(label)) {
             editFormFields.appendChild(createUrlDownloadControl(field));
@@ -4260,7 +5006,9 @@ function createBoundField(label, index, options = {}) {
     control.dataset.column = index;
     if (options.readOnly) control.readOnly = true;
     if (options.title) control.title = options.title;
+    decorateEditorFieldRequirement(field, caption, control, activeTab, db.tables[activeTab], index);
     field.append(caption, control);
+    if (options.note) addFieldNote(field, options.note, options.noteClass || "");
     return field;
 }
 
@@ -4399,6 +5147,7 @@ function ensurePlayerDateOfBirth(table) {
 }
 
 function createFixedSelectField(label, index, choices, className = "") {
+    const table = db.tables[activeTab];
     const field = document.createElement("label");
     field.className = `form-field field-${normalizeFieldName(label)} fixed-select-field ${className}`.trim();
     const caption = document.createElement("span");
@@ -4413,6 +5162,7 @@ function createFixedSelectField(label, index, choices, className = "") {
         select.appendChild(option);
     });
     select.value = choices.find(value => value.toLowerCase() === currentValue.toLowerCase()) || choices[0];
+    decorateEditorFieldRequirement(field, caption, select, activeTab, table, index);
     field.append(caption, select);
     return field;
 }
@@ -4424,6 +5174,7 @@ function normalizeTeamMapValue(value) {
 }
 
 function createTeamMapField(label, index, className = "") {
+    const table = db.tables[activeTab];
     const field = document.createElement("label");
     field.className = `form-field field-${normalizeFieldName(label)} fixed-select-field team-map-field ${className}`.trim();
     const caption = document.createElement("span");
@@ -4444,11 +5195,13 @@ function createTeamMapField(label, index, className = "") {
 
     const currentValue = String(editDraft[index] ?? "").trim();
     select.value = currentValue ? normalizeTeamMapValue(currentValue) : "";
+    decorateEditorFieldRequirement(field, caption, select, activeTab, table, index);
     field.append(caption, select);
     return field;
 }
 
 function createGenderField(label, index, className = "") {
+    const table = db.tables[activeTab];
     const field = document.createElement("div");
     field.className = `form-field field-gender gender-field ${className}`.trim();
     const caption = document.createElement("span");
@@ -4476,11 +5229,13 @@ function createGenderField(label, index, className = "") {
         });
         control.appendChild(button);
     });
+    decorateEditorFieldRequirement(field, caption, input, activeTab, table, index);
     field.append(caption, input, control);
     return field;
 }
 
 function createBooleanSegmentedField(label, index, trueLabel = "Yes", falseLabel = "No", className = "") {
+    const table = db.tables[activeTab];
     const field = document.createElement("div");
     field.className = `form-field boolean-segmented-field field-${normalizeFieldName(label)} ${className}`.trim();
     const caption = document.createElement("span");
@@ -4508,11 +5263,13 @@ function createBooleanSegmentedField(label, index, trueLabel = "Yes", falseLabel
         });
         control.appendChild(button);
     });
+    decorateEditorFieldRequirement(field, caption, input, activeTab, table, index);
     field.append(caption, input, control);
     return field;
 }
 
 function createColorPickerField(label, index, className = "") {
+    const table = db.tables[activeTab];
     const field = document.createElement("label");
     field.className = `form-field color-picker-field field-${normalizeFieldName(label)} ${className}`.trim();
     const caption = document.createElement("span");
@@ -4546,12 +5303,14 @@ function createColorPickerField(label, index, className = "") {
         const match = hexInput.value.trim().match(/^#?([0-9a-f]{6})$/i);
         hexInput.value = match ? `#${match[1]}`.toLowerCase() : colorInput.value.toLowerCase();
     });
+    decorateEditorFieldRequirement(field, caption, hexInput, activeTab, table, index);
     controls.append(colorInput, hexInput);
     field.append(caption, controls);
     return field;
 }
 
 function createRoleField(label, index, className = "") {
+    const table = db.tables[activeTab];
     const field = document.createElement("label");
     field.className = `form-field field-${normalizeFieldName(label)} role-field ${className}`.trim();
     const caption = document.createElement("span");
@@ -4574,11 +5333,13 @@ function createRoleField(label, index, className = "") {
         select.appendChild(option);
     });
     select.value = currentValue;
+    decorateEditorFieldRequirement(field, caption, select, activeTab, table, index);
     field.append(caption, select);
     return field;
 }
 
 function createSearchablePickerField(label, index, options, className = "", config = {}) {
+    const table = db.tables[activeTab];
     const field = document.createElement("div");
     field.className = `form-field searchable-picker-field ${className}`.trim();
     const caption = document.createElement("span");
@@ -4626,6 +5387,7 @@ function createSearchablePickerField(label, index, options, className = "", conf
     search.addEventListener("focus", renderOptions);
     search.addEventListener("input", renderOptions);
     document.addEventListener("click", event => { if (!picker.contains(event.target)) picker.classList.remove("open"); });
+    decorateEditorFieldRequirement(field, caption, hiddenInput, activeTab, table, index);
     picker.append(selectedIcon, search, menu);
     field.append(caption, hiddenInput, picker);
     return field;
@@ -4951,14 +5713,20 @@ function createTournamentCityPickerField(label, index, className = "") {
 
 function validateTournamentEligibilityDraft(table) {
     const invalidCountry = table.header.map((label, index) => ({ label, index, name: normalizeFieldName(label) }))
-        .find(field => ["country", "nationality"].includes(field.name) && !isEligibleTournamentCountry(editDraft[field.index]));
+        .find(field => {
+            const value = String(editDraft[field.index] ?? "").trim();
+            return value && ["country", "nationality"].includes(field.name) && !isEligibleTournamentCountry(value);
+        });
     if (invalidCountry) {
         alert(`${invalidCountry.label || "Country"} must be one of the eligible tournament countries.`);
         return false;
     }
     const country = getTournamentDraftCountry(table);
     const invalidCity = getTournamentCityFields(table)
-        .find(field => !isEligibleTournamentCityForCountry(editDraft[field.index], country));
+        .find(field => {
+            const value = String(editDraft[field.index] ?? "").trim();
+            return value && !isEligibleTournamentCityForCountry(value, country);
+        });
     if (invalidCity) {
         const countryText = country || "an eligible country";
         alert(`${invalidCity.label || "City"} must be one of the eligible tournament cities for ${countryText}.`);
@@ -6115,6 +6883,7 @@ function renderSkillsEditor(table) {
                 editDraft[field.index] = range.value;
                 editFormFields.querySelector(".potential-control")?.syncPotential?.();
             });
+            decorateEditorFieldRequirement(item, label, range, activeTab, table, field.index);
             item.append(label, range, value);
             grid.appendChild(item);
         });
@@ -6190,6 +6959,9 @@ function closeEditor(cancelled = false) {
     contentCreatorDraft = false;
     playerBirthAgeDraft = "";
     assetFileInput.value = "";
+    if (cancelled && typeof resumeValidatorAfterEditor === "function") {
+        resumeValidatorAfterEditor({ rerun: false });
+    }
 }
 
 // Toolbar actions
@@ -6859,6 +7631,7 @@ editForm.addEventListener("submit", async event => {
     event.preventDefault();
     if (editingRowIndex < 0) return;
     captureVisibleFields();
+    if (!(await validateRequiredEditorFields(db.tables[activeTab]))) return;
     if (activeTab.toLowerCase() === "tournaments" && !validateTournamentEligibilityDraft(db.tables[activeTab])) return;
     if (activeTab.toLowerCase() === "teams" && !normalizeTeamDraftForSave(db.tables[activeTab])) return;
     if (activeTab.toLowerCase() === "players") {
@@ -6897,15 +7670,20 @@ editForm.addEventListener("submit", async event => {
     if (teamRosterPlayerCreateContext && activeTab.toLowerCase() === "players") {
         const playerIndex = editingRowIndex;
         dirtyBeforeNewRow = false;
+        editorMissingRequiredColumns = new Set();
         markUnsavedChanges();
         updateTabCount(activeTab);
         restoreTeamRosterEditorAfterPlayerCreate(true, playerIndex);
         return;
     }
     dirtyBeforeNewRow = false;
+    editorMissingRequiredColumns = new Set();
     markUnsavedChanges();
     closeEditor();
     renderTable(activeTab);
+    if (typeof resumeValidatorAfterEditor === "function") {
+        resumeValidatorAfterEditor({ rerun: true });
+    }
 });
 assetFileInput.addEventListener("change", () => {
     const file = assetFileInput.files[0];
@@ -6918,12 +7696,100 @@ assetFileInput.addEventListener("change", () => {
     pendingAsset = file;
     showAssetPreview(file);
     btnRemoveAsset.disabled = false;
+    setAssetActionStatus("");
+});
+btnPastePlayerImage.addEventListener("click", async () => {
+    if (!capabilities.gameAssets) return;
+    captureVisibleFields();
+    const displayName = getAssetDisplayName();
+    const assetFolder = getCustomAssetFolderForTable(activeTab);
+    if (!displayName) {
+        await showAppAlert({
+            context: "Image paste",
+            title: "NAME REQUIRED",
+            message: "Enter a nickname, Internal ID, ID, or name before pasting an image."
+        });
+        return;
+    }
+    if (!assetFolder) return;
+
+    const fileName = makePlayerPngFilename(displayName);
+    btnPastePlayerImage.disabled = true;
+    setAssetActionStatus("Reading copied image...");
+
+    try {
+        const result = await desktopBridge.saveClipboardImage({
+            folder: assetFolder,
+            fileName
+        });
+
+        if (result?.error) throw new Error(result.error);
+
+        if (!result?.data) throw new Error("No PNG data was returned from the desktop clipboard.");
+
+        const pngBlob = new Blob([result.data], { type: "image/png" });
+        const nextAssetKey = getAssetKey(activeTab, editDraft);
+        if (nextAssetKey) {
+            await AssetDB.remove(nextAssetKey).catch(error => console.error("Unable to clear browser image override", error));
+        }
+        if (currentAssetKey && currentAssetKey !== nextAssetKey) {
+            await AssetDB.remove(currentAssetKey).catch(error => console.error("Unable to clear previous browser image override", error));
+        }
+
+        pendingAsset = undefined;
+        currentAssetKey = nextAssetKey || currentAssetKey;
+        rememberRuntimeAsset(assetFolder, displayName, result.fileName || fileName, result.assetPath || `assets/custom/${assetFolder}/${encodeURIComponent(fileName)}`);
+        showAssetPreview(pngBlob);
+        btnRemoveAsset.disabled = true;
+        setAssetActionStatus(`Saved to ${result.filePath || result.folderPath || result.rootPath || `${assetFolder}\\${result.fileName || fileName}`}`, "success");
+        if (activeTab) renderTable(activeTab);
+    } catch (error) {
+        console.error("Unable to paste player image", error);
+        setAssetActionStatus("Paste failed.", "error");
+        await showAppAlert({
+            context: "Image paste",
+            title: "NO IMAGE PASTED",
+            message: `NoScope could not save a copied image. ${error.message}`
+        });
+    } finally {
+        btnPastePlayerImage.disabled = false;
+    }
+});
+btnOpenPlayerImageFolder.addEventListener("click", async () => {
+    if (!capabilities.assetFolders) return;
+    const assetFolder = getCustomAssetFolderForTable(activeTab);
+    if (!assetFolder) return;
+    try {
+        const result = await desktopBridge.openCustomAssetFolder({ folder: assetFolder });
+        if (result?.error) throw new Error(result.error);
+        setAssetActionStatus(`Image folder: ${result.folderPath}`, "success");
+    } catch (error) {
+        console.error("Unable to open player image folder", error);
+        setAssetActionStatus("Unable to open image folder.", "error");
+    }
+});
+btnChooseCustomAssetsFolder.addEventListener("click", async () => {
+    if (!capabilities.assetFolders) return;
+    const assetFolder = getCustomAssetFolderForTable(activeTab);
+    if (!assetFolder) return;
+    try {
+        const result = await desktopBridge.chooseCustomAssetRoot();
+        if (result?.canceled) return;
+        if (result?.error) throw new Error(result.error);
+        const folderResult = await desktopBridge.getCustomAssetFolder?.({ folder: assetFolder });
+        if (folderResult?.error) throw new Error(folderResult.error);
+        setAssetActionStatus(`Saving ${assetFolder} images to ${folderResult?.folderPath || result.rootPath}`, "success");
+    } catch (error) {
+        console.error("Unable to choose CustomAssets folder", error);
+        setAssetActionStatus("Unable to choose image folder.", "error");
+    }
 });
 btnRemoveAsset.addEventListener("click", () => {
     pendingAsset = null;
     assetFileInput.value = "";
     assetPreview.innerHTML = "<span>No image</span>";
     btnRemoveAsset.disabled = true;
+    setAssetActionStatus("");
 });
 btnCopyAssetLink.addEventListener("click", async () => {
     const candidates = editingRowIndex >= 0 ? getBundledAssetCandidates(activeTab, db.tables[activeTab].rows[editingRowIndex]) : [];
@@ -6956,6 +7822,22 @@ document.addEventListener("keydown", event => { if (event.key === "Escape" && !e
 async function saveEmdbBlob(blob, suggestedName) {
     const cleanName = String(suggestedName || "edited.emdb").trim();
     const fileName = cleanName.toLowerCase().endsWith(".emdb") ? cleanName : `${cleanName}.emdb`;
+    if (capabilities.nativeFiles) {
+        const result = await desktopBridge.saveEmdb({
+            data: await blob.arrayBuffer(),
+            suggestedName: fileName
+        });
+
+        if (result?.canceled) {
+            const error = new Error("Save cancelled.");
+            error.name = "AbortError";
+            throw error;
+        }
+        if (result?.error) throw new Error(result.error);
+
+        return result?.fileName || fileName;
+    }
+
     if (typeof window.showSaveFilePicker === "function") {
         const handle = await window.showSaveFilePicker({
             suggestedName: fileName,
@@ -7075,3 +7957,5 @@ btnExportCsvs.addEventListener("click", async () => {
         alert(err.message);
     }
 });
+
+loadRemoteAssetManifest();

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>NoScope-Installer</AssemblyName>
+    <RootNamespace>NoScopeInstaller</RootNamespace>
+    <ApplicationIcon>..\..\build\icon.ico</ApplicationIcon>
+    <Version>2.2.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\branding\NoScope.png" LogicalName="NoScope.png" />
+    <EmbeddedResource Include="..\..\assets\branding\NoScopeIcon.png" LogicalName="NoScopeIcon.png" />
+    <EmbeddedResource Include="..\..\build\icon.ico" LogicalName="NoScopeIcon.ico" Condition="Exists('..\..\build\icon.ico')" />
+    <EmbeddedResource Include="..\..\release\noscope-payload.zip" LogicalName="payload.zip" Condition="Exists('..\..\release\noscope-payload.zip') and '$(UninstallerOnly)' != 'true'" />
+    <EmbeddedResource Include="..\..\release\noscope-uninstaller.exe" LogicalName="uninstaller.exe" Condition="Exists('..\..\release\noscope-uninstaller.exe') and '$(UninstallerOnly)' != 'true'" />
+  </ItemGroup>
+</Project>

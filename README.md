@@ -2,7 +2,7 @@
 
 NoScope is a community-built, browser-based editor for Esports Manager `.emdb` database files. It provides a visual interface for browsing, searching, comparing, filtering, creating, editing, validating, and merging database records without manually working with the CSV files stored inside an `.emdb` archive.
 
-NoScope currently targets the database structure used by Esports Manager 2026. The current release is `v2.1.0`; full release notes are available in the built-in Changelog panel and under [`changelogs/`](changelogs/).
+NoScope currently targets the database structure used by Esports Manager 2026. The current release is `v2.2.0`; full release notes are available in the built-in Changelog panel and under [`changelogs/`](changelogs/).
 
 > [!IMPORTANT]
 > NoScope is an unofficial community project. It is not affiliated with, endorsed by, or maintained by the developers or publishers of Esports Manager. Always keep a backup of the original database before editing it.
@@ -117,7 +117,7 @@ No build process is required to run NoScope. You need:
 
 - A modern desktop browser.
 - An Esports Manager `.emdb` database file, unless using a bundled Library database.
-- An internet connection for the externally hosted fonts, JSZip, Papa Parse, and OpenStreetMap tiles.
+- An internet connection for the externally hosted fonts and OpenStreetMap tiles.
 
 Chromium-based browsers provide the most complete experience because they support the native Save As API.
 
@@ -138,6 +138,31 @@ http://localhost:8000
 ```
 
 Opening `index.html` directly still supports most manual open, edit, and save workflows, but browser security restrictions can block bundled databases, release notes, and other local fetches.
+
+### Run as a desktop app
+
+NoScope can also run through Electron as a Windows desktop app shell.
+
+```powershell
+npm install
+npm start
+```
+
+The Electron version uses native Open and Save dialogs for `.emdb` files. By default, Save opens in your `Documents\NoScope` folder, creating that folder when needed.
+
+To create the custom Windows installer:
+
+```powershell
+npm run dist
+```
+
+The fully custom installer is written to `release/NoScope-Installer.exe`. It installs a matching `NoScope-Uninstaller.exe` with the same styled interface and registers it with Windows uninstall settings.
+
+The older NSIS installer can still be built as a fallback:
+
+```powershell
+npm run dist:nsis
+```
 
 ## How to use NoScope
 
@@ -273,13 +298,13 @@ NoScope/
 
 ## Updating bundled assets
 
-After adding, renaming, or removing images under `assets/custom/` or `assets/countries/`, regenerate the browser asset index:
+After adding, renaming, or removing images under `assets/custom/` or `assets/countries/`, regenerate the asset indexes:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-asset-manifest.ps1
 ```
 
-The script writes the new index to `js/generated/asset-manifest.js`. Commit the regenerated manifest together with the asset changes.
+The script writes the in-app index to `js/generated/asset-manifest.js` and the Cloudflare install index to `manifest.json`. Commit the regenerated manifests together with the asset changes. If Cloudflare Pages builds from GitHub, use `npm run build` as the Pages build command so asset renames refresh `manifest.json` during deploy.
 
 ## Open-source development
 

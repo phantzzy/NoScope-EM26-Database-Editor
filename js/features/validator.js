@@ -81,7 +81,7 @@ const DATABASE_VALIDATION_RULES = {
     }
 };
 
-const VALIDATOR_ENTRY_SAMPLE_LIMIT = 12;
+const VALIDATOR_ENTRY_SAMPLE_LIMIT = 14;
 const btnValidateDatabase = document.getElementById("btn-validate-database");
 const validatorModal = document.getElementById("validator-modal");
 const validatorSummary = document.getElementById("validator-summary");
@@ -89,10 +89,18 @@ const validatorResults = document.getElementById("validator-results");
 const validatorDescription = document.getElementById("validator-modal-description");
 const validatorSaveNote = document.getElementById("validator-save-note");
 const btnCloseValidator = document.getElementById("btn-close-validator");
+const btnRerunValidator = document.getElementById("btn-rerun-validator");
 const btnDismissValidator = document.getElementById("btn-dismiss-validator");
 const btnSaveAnyway = document.getElementById("btn-save-anyway");
 
 let resolveValidatorReview = null;
+let validatorActiveFilter = "all";
+let validatorSearchTerm = "";
+let validatorCurrentResult = null;
+let validatorReviewIntent = "manual";
+let validatorHoverCard = null;
+let validatorReopenAfterEditor = false;
+let validatorReopenIntent = "manual";
 
 function getValidationTableName(requestedName) {
     const names = Object.keys(db?.tables || {});
@@ -100,6 +108,12 @@ function getValidationTableName(requestedName) {
         return names.find(name => ["staff", "staffs"].includes(name.toLowerCase())) || "";
     }
     return names.find(name => name.toLowerCase() === requestedName.toLowerCase()) || "";
+}
+
+function getValidationRulesForTableName(tableName) {
+    const normalized = String(tableName || "").toLowerCase();
+    if (normalized === "staffs") return DATABASE_VALIDATION_RULES.Staff;
+    return DATABASE_VALIDATION_RULES[Object.keys(DATABASE_VALIDATION_RULES).find(name => name.toLowerCase() === normalized)] || null;
 }
 
 function getValidationColumnIndex(table, aliases) {
@@ -139,6 +153,7 @@ function collectDuplicateValidationIssues(tableName, table, rules) {
                 value: group.value,
                 count: group.rows.length,
                 entries: group.rows.map(rowIndex => ({
+                    tableName,
                     rowIndex,
                     label: getValidationEntryLabel(table, table.rows[rowIndex], rules.labelAliases, rowIndex)
                 }))
@@ -170,6 +185,7 @@ function collectCompositeDuplicateValidationIssues(tableName, table, rules) {
                 value: group.value,
                 count: group.rows.length,
                 entries: group.rows.map(rowIndex => ({
+                    tableName,
                     rowIndex,
                     label: getValidationEntryLabel(table, table.rows[rowIndex], rules.labelAliases, rowIndex)
                 }))
@@ -197,6 +213,7 @@ function collectMissingValidationIssues(tableName, table, rules) {
         table.rows.forEach((row, rowIndex) => {
             if (String(row[columnIndex] ?? "").trim()) return;
             entries.push({
+                tableName,
                 rowIndex,
                 label: getValidationEntryLabel(table, row, rules.labelAliases, rowIndex)
             });
@@ -224,6 +241,7 @@ function collectInvalidTeamMapValidationIssues(tableName, table, rules) {
                 const value = String(row[field.index] ?? "").trim();
                 if (!value || normalizeTeamMapValue(value)) return;
                 entries.push({
+                    tableName,
                     rowIndex,
                     label: getValidationEntryLabel(table, row, rules.labelAliases, rowIndex),
                     value
@@ -270,6 +288,7 @@ function collectMissingPlayerTeamValidationIssues(tableName, table, rules) {
         const value = normalizeValidationValue(row[teamReferenceIndex]);
         if (!value || isValidationFreeAgentValue(value) || validTeams.has(value)) return;
         entries.push({
+            tableName,
             rowIndex,
             label: getValidationEntryLabel(table, row, rules.labelAliases, rowIndex),
             value
@@ -305,6 +324,7 @@ function collectPlayerStaffDuplicateValidationIssues() {
         if (!fullName) return;
         if (!staffByFullName.has(fullName)) staffByFullName.set(fullName, []);
         staffByFullName.get(fullName).push({
+            tableName: staffTableName,
             rowIndex,
             label: getValidationEntryLabel(staffTable, row, DATABASE_VALIDATION_RULES.Staff.labelAliases, rowIndex)
         });
@@ -314,22 +334,25 @@ function collectPlayerStaffDuplicateValidationIssues() {
     playersTable.rows.forEach((row, rowIndex) => {
         const fullName = getValidationFullName(playersTable, row);
         if (!fullName || !staffByFullName.has(fullName)) return;
-        if (!matchesByFullName.has(fullName)) matchesByFullName.set(fullName, []);
-        staffByFullName.get(fullName).forEach(staffEntry => {
-            matchesByFullName.get(fullName).push({
-                rowIndex,
-                label: getValidationEntryLabel(playersTable, row, DATABASE_VALIDATION_RULES.Players.labelAliases, rowIndex),
-                value: `${fullName} matches staff ${staffEntry.label} (#${staffEntry.rowIndex + 1})`
+        if (!matchesByFullName.has(fullName)) {
+            matchesByFullName.set(fullName, {
+                players: [],
+                staff: staffByFullName.get(fullName)
             });
+        }
+        matchesByFullName.get(fullName).players.push({
+            tableName: playersTableName,
+            rowIndex,
+            label: getValidationEntryLabel(playersTable, row, DATABASE_VALIDATION_RULES.Players.labelAliases, rowIndex)
         });
     });
-    return [...matchesByFullName.entries()].map(([fullName, entries]) => ({
+    return [...matchesByFullName.entries()].map(([fullName, group]) => ({
         type: "duplicate",
         tableName: `${playersTableName} / ${staffTableName}`,
         fieldLabel: "Player/staff full name",
         value: fullName,
-        count: entries.length,
-        entries
+        count: group.players.length + group.staff.length,
+        entries: [...group.players, ...group.staff]
     }));
 }
 
@@ -401,6 +424,185 @@ function getValidatorIssueMessage(issue) {
     return `${issue.count} ${issue.count === 1 ? "entry is" : "entries are"} missing ${issue.fieldLabel}.`;
 }
 
+function getValidatorIssueCategory(issue) {
+    if (issue.type === "duplicate") return "duplicates";
+    if (["invalid-value", "invalid-reference"].includes(issue.type)) return "invalid";
+    return "missing";
+}
+
+function getValidatorEntryTableName(issue, entry) {
+    if (entry?.tableName && db?.tables?.[entry.tableName]) return entry.tableName;
+    if (db?.tables?.[issue.tableName]) return issue.tableName;
+    return "";
+}
+
+function getValidatorEntryRow(issue, entry) {
+    const tableName = getValidatorEntryTableName(issue, entry);
+    const table = tableName ? db.tables[tableName] : null;
+    if (!table || entry.rowIndex < 0 || entry.rowIndex >= table.rows.length) return null;
+    return { tableName, table, row: table.rows[entry.rowIndex] };
+}
+
+function getValidatorEntryDetailRows(tableName, table, row) {
+    const normalizedTable = tableName.toLowerCase();
+    const shared = [
+        ["Internal ID", ["internalid", "playerid", "staffid", "id"]],
+        ["Name", ["nickname", "nick", "name", "companyname", "title"]],
+        ["Country", ["country", "nationality"]],
+        ["Rating", ["rating", "overall", "ers"]]
+    ];
+    const byTable = {
+        players: [["Full name", ["name", "firstname", "forename"]], ["Surname", ["surname", "lastname"]], ["Team", ["team", "teamname", "teamid"]], ["Role", ["role1", "primaryrole", "role"]]],
+        staff: [["Full name", ["name", "firstname", "forename"]], ["Surname", ["surname", "lastname"]], ["Team", ["team", "teamname", "teamid"]], ["Role", ["role", "job", "type", "position"]]],
+        staffs: [["Full name", ["name", "firstname", "forename"]], ["Surname", ["surname", "lastname"]], ["Team", ["team", "teamname", "teamid"]], ["Role", ["role", "job", "type", "position"]]],
+        teams: [["Nickname", ["nick", "nickname"]], ["Team name", ["name", "teamname"]], ["ERS", ["ers", "erspoints", "rating"]]],
+        tournaments: [["Tournament", ["name", "tournamentname", "title"]], ["Tier", ["tier"]], ["Prize", ["prizefund", "prizemoney"]], ["City", ["city", "hostcity"]]],
+        sponsors: [["Company", ["companyname", "name"]], ["Tier", ["tier", "level"]], ["Type", ["type", "category"]]]
+    };
+    return [...(byTable[normalizedTable] || []), ...shared]
+        .map(([label, aliases]) => [label, getTableValue(table, row, aliases)])
+        .filter(([, value], index, list) => value && list.findIndex(([, other]) => other === value) === index)
+        .slice(0, 7);
+}
+
+function removeValidatorHoverCard() {
+    if (!validatorHoverCard) return;
+    validatorHoverCard.remove();
+    validatorHoverCard = null;
+}
+
+function positionValidatorHoverCard(event) {
+    if (!validatorHoverCard) return;
+    const margin = 14;
+    const rect = validatorHoverCard.getBoundingClientRect();
+    let left = event.clientX + margin;
+    let top = event.clientY + margin;
+    if (left + rect.width > window.innerWidth - margin) left = event.clientX - rect.width - margin;
+    if (top + rect.height > window.innerHeight - margin) top = window.innerHeight - rect.height - margin;
+    validatorHoverCard.style.left = `${Math.max(margin, left)}px`;
+    validatorHoverCard.style.top = `${Math.max(margin, top)}px`;
+}
+
+function showValidatorHoverCard(event, issue, entry) {
+    const details = getValidatorEntryRow(issue, entry);
+    if (!details) return;
+    removeValidatorHoverCard();
+    const { tableName, table, row } = details;
+    const card = document.createElement("aside");
+    card.className = "validator-hover-card";
+    const portrait = document.createElement("div");
+    portrait.className = "validator-hover-portrait";
+    portrait.textContent = "No image";
+    if (typeof getBundledAssetCandidates === "function" && typeof loadFirstAvailableImage === "function") {
+        loadFirstAvailableImage(portrait, getBundledAssetCandidates(tableName, row), "No image");
+    }
+    const body = document.createElement("div");
+    body.className = "validator-hover-body";
+    const label = document.createElement("strong");
+    label.textContent = getValidationEntryLabel(table, row, getValidationRulesForTableName(tableName)?.labelAliases || ["nickname", "nick", "name"], entry.rowIndex);
+    const meta = document.createElement("span");
+    meta.textContent = `${tableName} - row ${entry.rowIndex + 1}`;
+    const fields = document.createElement("dl");
+    getValidatorEntryDetailRows(tableName, table, row).forEach(([fieldLabel, value]) => {
+        const dt = document.createElement("dt");
+        dt.textContent = fieldLabel;
+        const dd = document.createElement("dd");
+        dd.textContent = value;
+        fields.append(dt, dd);
+    });
+    body.append(label, meta, fields);
+    card.append(portrait, body);
+    document.body.appendChild(card);
+    validatorHoverCard = card;
+    positionValidatorHoverCard(event);
+}
+
+function openValidatorEntryEditor(issue, entry) {
+    const details = getValidatorEntryRow(issue, entry);
+    if (!details) return;
+    validatorReopenAfterEditor = true;
+    validatorReopenIntent = validatorReviewIntent;
+    closeValidatorReview(false);
+    switchTab(details.tableName);
+    openEditor(entry.rowIndex);
+}
+
+async function deleteValidatorEntry(issue, entry) {
+    const details = getValidatorEntryRow(issue, entry);
+    if (!details) return;
+    const { tableName, table, row } = details;
+    const label = getValidationEntryLabel(table, row, getValidationRulesForTableName(tableName)?.labelAliases || ["nickname", "nick", "name"], entry.rowIndex);
+    const confirmed = typeof requestConfirmation === "function"
+        ? await requestConfirmation({
+            context: "Validator cleanup",
+            title: `DELETE ${label}?`,
+            message: `This removes ${label} from ${tableName} row ${entry.rowIndex + 1}. Save the .emdb afterwards to keep the change.`,
+            cancelLabel: "Keep record",
+            acceptLabel: "Delete record",
+            danger: true
+        })
+        : false;
+    if (!confirmed) return;
+    removeValidatorHoverCard();
+    const assetKey = typeof getAssetKey === "function" ? getAssetKey(tableName, row) : "";
+    if (assetKey && typeof AssetDB !== "undefined") {
+        await AssetDB.remove(assetKey).catch(error => console.error("Unable to remove local asset for deleted validator entry", error));
+    }
+    if (tableName.toLowerCase() === "players" && typeof setContentCreatorPlayer === "function") {
+        setContentCreatorPlayer(tableName, row, entry.rowIndex, false);
+    }
+    table.rows.splice(entry.rowIndex, 1);
+    invalidatePlayerLeaderboardRanks(tableName);
+    updateTabCount(tableName);
+    markUnsavedChanges();
+    if (activeTab === tableName) renderTable(tableName);
+    setStatus(`Deleted ${label} from ${tableName}.`, "success");
+    const nextResult = refreshValidatorReview({ announce: false }) || validateCurrentDatabase();
+    if (!nextResult.hasIssues) {
+        closeValidatorReview(validatorReviewIntent === "save");
+        setStatus("Validation passed after cleanup.", "success");
+        return;
+    }
+}
+
+function createValidatorEntryChip(issue, entry) {
+    const details = getValidatorEntryRow(issue, entry);
+    const rowText = `#${entry.rowIndex + 1}`;
+    const item = document.createElement("div");
+    item.className = "validator-entry-chip";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "validator-entry-open";
+    open.textContent = entry.value
+        ? `${entry.label} -> ${entry.value} (${rowText})`
+        : `${entry.label} (${rowText})`;
+    if (details) {
+        open.addEventListener("mouseenter", event => showValidatorHoverCard(event, issue, entry));
+        open.addEventListener("mousemove", positionValidatorHoverCard);
+        open.addEventListener("mouseleave", removeValidatorHoverCard);
+        open.addEventListener("focus", event => showValidatorHoverCard(event, issue, entry));
+        open.addEventListener("blur", removeValidatorHoverCard);
+        open.addEventListener("click", () => openValidatorEntryEditor(issue, entry));
+    } else {
+        open.disabled = true;
+    }
+    const actions = document.createElement("span");
+    actions.className = "validator-entry-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.disabled = !details;
+    edit.addEventListener("click", () => openValidatorEntryEditor(issue, entry));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Delete";
+    remove.disabled = !details;
+    remove.addEventListener("click", () => deleteValidatorEntry(issue, entry));
+    actions.append(edit, remove);
+    item.append(open, actions);
+    return item;
+}
+
 function createValidatorIssueRow(issue) {
     const item = document.createElement("article");
     item.className = `validator-issue validator-issue-${issue.type}`;
@@ -427,16 +629,13 @@ function createValidatorIssueRow(issue) {
         const entries = document.createElement("div");
         entries.className = "validator-entry-samples";
         issue.entries.slice(0, VALIDATOR_ENTRY_SAMPLE_LIMIT).forEach(entry => {
-            const sample = document.createElement("span");
-            sample.textContent = entry.value
-                ? `${entry.label} -> ${entry.value} (#${entry.rowIndex + 1})`
-                : `${entry.label} (#${entry.rowIndex + 1})`;
-            entries.appendChild(sample);
+            entries.appendChild(createValidatorEntryChip(issue, entry));
         });
         if (issue.entries.length > VALIDATOR_ENTRY_SAMPLE_LIMIT) {
             const remaining = document.createElement("span");
             remaining.className = "validator-entry-more";
-            remaining.textContent = `+${issue.entries.length - VALIDATOR_ENTRY_SAMPLE_LIMIT} more`;
+            const hiddenCount = issue.entries.length - VALIDATOR_ENTRY_SAMPLE_LIMIT;
+            remaining.textContent = `Showing ${VALIDATOR_ENTRY_SAMPLE_LIMIT} of ${issue.entries.length} affected records. ${hiddenCount} more are hidden to keep this list usable. Search above to narrow it down.`;
             entries.appendChild(remaining);
         }
         body.appendChild(entries);
@@ -445,7 +644,73 @@ function createValidatorIssueRow(issue) {
     return item;
 }
 
+function issueMatchesValidatorFilters(issue) {
+    if (validatorActiveFilter !== "all" && getValidatorIssueCategory(issue) !== validatorActiveFilter) return false;
+    const search = validatorSearchTerm.trim().toLowerCase();
+    if (!search) return true;
+    const haystack = [
+        issue.tableName,
+        issue.fieldLabel,
+        issue.value,
+        getValidatorIssueMessage(issue),
+        ...issue.entries.flatMap(entry => [entry.label, entry.value, entry.tableName])
+    ].join(" ").toLowerCase();
+    return haystack.includes(search);
+}
+
+function createValidatorToolbar(result, filteredIssues) {
+    const toolbar = document.createElement("div");
+    toolbar.className = "validator-toolbar";
+    const filters = document.createElement("div");
+    filters.className = "validator-filter-tabs";
+    [
+        ["all", "All", result.issues.length],
+        ["duplicates", "Duplicates", result.duplicateIssues.length],
+        ["missing", "Missing", result.missingIssues.length],
+        ["invalid", "Invalid", result.invalidIssues.length]
+    ].forEach(([value, label, count]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.classList.toggle("active", validatorActiveFilter === value);
+        button.textContent = `${label} ${count}`;
+        button.addEventListener("click", () => {
+            validatorActiveFilter = value;
+            renderValidatorResults(result);
+        });
+        filters.appendChild(button);
+    });
+    const search = document.createElement("input");
+    search.type = "search";
+    search.placeholder = "Search findings...";
+    search.value = validatorSearchTerm;
+    search.addEventListener("input", () => {
+        validatorSearchTerm = search.value;
+        const cursorPosition = search.selectionStart ?? validatorSearchTerm.length;
+        renderValidatorResults(result);
+        const nextSearch = validatorResults.querySelector(".validator-toolbar input");
+        nextSearch?.focus();
+        nextSearch?.setSelectionRange(cursorPosition, cursorPosition);
+    });
+    const tools = document.createElement("div");
+    tools.className = "validator-toolbar-actions";
+    const collapse = document.createElement("button");
+    collapse.type = "button";
+    collapse.textContent = "Collapse all";
+    collapse.addEventListener("click", () => validatorResults.querySelectorAll(".validator-table-group").forEach(group => { group.open = false; }));
+    const expand = document.createElement("button");
+    expand.type = "button";
+    expand.textContent = "Expand all";
+    expand.addEventListener("click", () => validatorResults.querySelectorAll(".validator-table-group").forEach(group => { group.open = true; }));
+    const status = document.createElement("span");
+    status.textContent = `${filteredIssues.length} visible`;
+    tools.append(status, collapse, expand);
+    toolbar.append(filters, search, tools);
+    return toolbar;
+}
+
 function renderValidatorResults(result) {
+    removeValidatorHoverCard();
+    validatorCurrentResult = result;
     validatorSummary.replaceChildren(
         createValidatorSummaryItem(result.duplicateIssues.length, "duplicate groups", "is-duplicate"),
         createValidatorSummaryItem(result.missingValueCount, "missing values", "is-missing"),
@@ -453,8 +718,19 @@ function renderValidatorResults(result) {
         createValidatorSummaryItem(result.affectedTables, "tables affected")
     );
     validatorResults.innerHTML = "";
+    const filteredIssues = result.issues.filter(issueMatchesValidatorFilters);
+    validatorResults.appendChild(createValidatorToolbar(result, filteredIssues));
+    if (!filteredIssues.length) {
+        const empty = document.createElement("div");
+        empty.className = "validator-empty";
+        empty.textContent = result.hasIssues
+            ? "No findings match the current filter."
+            : "Validation is clean for the loaded database.";
+        validatorResults.appendChild(empty);
+        return;
+    }
     const grouped = new Map();
-    result.issues.forEach(issue => {
+    filteredIssues.forEach(issue => {
         if (!grouped.has(issue.tableName)) grouped.set(issue.tableName, []);
         grouped.get(issue.tableName).push(issue);
     });
@@ -480,6 +756,7 @@ function renderValidatorResults(result) {
 
 function closeValidatorReview(continueSaving = false) {
     if (validatorModal.hidden) return;
+    removeValidatorHoverCard();
     validatorModal.hidden = true;
     const resolve = resolveValidatorReview;
     resolveValidatorReview = null;
@@ -488,20 +765,85 @@ function closeValidatorReview(continueSaving = false) {
 
 function showValidatorReview(result, intent = "manual") {
     const saving = intent === "save";
+    validatorReviewIntent = intent;
+    validatorActiveFilter = "all";
+    validatorSearchTerm = "";
     renderValidatorResults(result);
-    validatorDescription.textContent = saving
-        ? "NoScope found possible problems. Review them before deciding whether to save this database."
-        : "NoScope found possible duplicate entries or missing important fields.";
-    validatorSaveNote.textContent = saving
-        ? "Saving anyway keeps every value exactly as it is."
-        : "The validator does not change database values.";
+    if (!result.hasIssues) {
+        validatorDescription.textContent = "NoScope did not find duplicate entries or missing important fields.";
+        validatorSaveNote.textContent = "The loaded database is clean according to the current validator rules.";
+    } else {
+        validatorDescription.textContent = saving
+            ? "NoScope found possible problems. Review them before deciding whether to save this database."
+            : "NoScope found possible duplicate entries or missing important fields.";
+        validatorSaveNote.textContent = saving
+            ? "Use record actions to clean up issues, or save anyway to keep every value exactly as it is."
+            : "Record actions apply to the loaded database immediately and still require saving.";
+    }
     btnDismissValidator.textContent = saving ? "Return to editor" : "Close";
-    btnSaveAnyway.hidden = !saving;
+    btnSaveAnyway.hidden = !saving || !result.hasIssues;
     validatorModal.hidden = false;
     btnDismissValidator.focus();
     return new Promise(resolve => {
         resolveValidatorReview = resolve;
     });
+}
+
+function refreshValidatorReview(options = {}) {
+    if (!db?.tables || !Object.keys(db.tables).length) return null;
+    const { announce = true } = options;
+    const result = validateCurrentDatabase();
+    renderValidatorResults(result);
+    const saving = validatorReviewIntent === "save";
+    if (!result.hasIssues) {
+        validatorDescription.textContent = "NoScope did not find duplicate entries or missing important fields.";
+        validatorSaveNote.textContent = "The loaded database is clean according to the current validator rules.";
+        btnSaveAnyway.hidden = true;
+    } else {
+        validatorDescription.textContent = saving
+            ? "NoScope found possible problems. Review them before deciding whether to save this database."
+            : "NoScope found possible duplicate entries or missing important fields.";
+        validatorSaveNote.textContent = saving
+            ? "Use record actions to clean up issues, or save anyway to keep every value exactly as it is."
+            : "Record actions apply to the loaded database immediately and still require saving.";
+        btnSaveAnyway.hidden = !saving;
+    }
+    if (announce) {
+        if (result.hasIssues) {
+            const findingCount = result.issues.length;
+            setStatus(`Validation rerun found ${findingCount} ${findingCount === 1 ? "issue" : "issues"}.`, "error");
+        } else {
+            setStatus("Validation passed. No duplicate entries or missing important fields found.", "success");
+        }
+    }
+    return result;
+}
+
+function resumeValidatorAfterEditor(options = {}) {
+    if (!validatorReopenAfterEditor) return false;
+    const { rerun = false } = options;
+    const intent = validatorReopenIntent;
+    validatorReopenAfterEditor = false;
+    validatorReopenIntent = "manual";
+    if (rerun) {
+        const result = validateCurrentDatabase();
+        if (!result.hasIssues) {
+            setStatus("Validation passed after edit.", "success");
+            showValidatorReview(result, "manual");
+            return true;
+        }
+        const findingCount = result.issues.length;
+        setStatus(`Validation found ${findingCount} ${findingCount === 1 ? "issue" : "issues"} after edit.`, "error");
+        showValidatorReview(result, intent);
+        return true;
+    }
+    if (validatorCurrentResult) {
+        showValidatorReview(validatorCurrentResult, intent);
+        return true;
+    }
+    const result = validateCurrentDatabase();
+    showValidatorReview(result, intent);
+    return true;
 }
 
 async function validateDatabaseBeforeSave() {
@@ -528,6 +870,7 @@ btnValidateDatabase.addEventListener("click", async () => {
 });
 
 btnCloseValidator.addEventListener("click", () => closeValidatorReview(false));
+btnRerunValidator.addEventListener("click", () => refreshValidatorReview());
 btnDismissValidator.addEventListener("click", () => closeValidatorReview(false));
 btnSaveAnyway.addEventListener("click", () => closeValidatorReview(true));
 validatorModal.addEventListener("click", event => {
