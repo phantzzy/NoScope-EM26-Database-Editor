@@ -359,6 +359,13 @@ const PLAYER_FACEIT_ELO_PRESETS = [
     { value: "high", label: "High Level 10", detail: "2,400 to 3,000 ELO", min: 9, max: 13 },
     { value: "elite", label: "Elite Level 10", detail: "3,000+ ELO", min: 11, max: 15 }
 ];
+const PLAYER_SKILL_TIER_PRESETS = [
+    { key: "t1", label: "T1", name: "Elite", range: "17-20", min: 17, max: 20, icon: "assets/badges/GE.png" },
+    { key: "t2", label: "T2", name: "Pro", range: "13-17", min: 13, max: 17, icon: "assets/badges/LEM.png" },
+    { key: "t3", label: "T3", name: "Comp", range: "9-13", min: 9, max: 13, icon: "assets/badges/MGE.png" },
+    { key: "t4", label: "T4", name: "Amat", range: "5-9", min: 5, max: 9, icon: "assets/badges/GN1.png" },
+    { key: "nn", label: "NN", name: "Beginner", range: "1-5", min: 1, max: 5, icon: "assets/badges/S3.png" }
+];
 const desktopBridge = window.noscopeDesktop || null;
 const capabilities = {
     desktop: Boolean(desktopBridge),
@@ -6853,6 +6860,13 @@ function createPlayerEntryGuidePanel() {
     const guide = document.createElement("aside");
     guide.className = "player-entry-guide-panel";
     guide.setAttribute("aria-label", "Player entry guide");
+    const tierRows = PLAYER_SKILL_TIER_PRESETS.map(tier => `
+                <div class="entry-guide-row tier-${tier.key}">
+                    <span class="entry-guide-mark"><img src="${tier.icon}" alt="" aria-hidden="true"></span>
+                    <span>${tier.name}</span>
+                    <b>${tier.range}</b>
+                </div>
+    `).join("");
     guide.innerHTML = `
         <header><span>Entry guide</span></header>
         <section>
@@ -6863,11 +6877,7 @@ function createPlayerEntryGuidePanel() {
         <section>
             <h4>Tier reference</h4>
             <div class="entry-guide-grid">
-                <div class="entry-guide-row tier-t1"><span class="entry-guide-mark">T1</span><span>Elite</span><b>17-20</b></div>
-                <div class="entry-guide-row tier-t2"><span class="entry-guide-mark">T2</span><span>Pro</span><b>13-17</b></div>
-                <div class="entry-guide-row tier-t3"><span class="entry-guide-mark">T3</span><span>Comp</span><b>9-13</b></div>
-                <div class="entry-guide-row tier-t4"><span class="entry-guide-mark">T4</span><span>Amat</span><b>5-9</b></div>
-                <div class="entry-guide-row tier-nn"><span class="entry-guide-mark">NN</span><span>Beginner</span><b>1-5</b></div>
+${tierRows}
             </div>
         </section>
         <section>
@@ -6952,28 +6962,16 @@ function renderSkillsEditor(table) {
     const controls = document.createElement("div");
     controls.className = "skill-randomizer";
     controls.innerHTML = "<span>RANDOMIZE:</span>";
-    [
-        { key: "t1", label: "T1", min: 17, max: 20 },
-        { key: "t2", label: "T2", min: 13, max: 17 },
-        { key: "t3", label: "\u25A0 T3", min: 9, max: 13 },
-        { key: "t4", label: "\u2022 T4", min: 5, max: 9 },
-        { key: "nn", label: "? NN", min: 1, max: 5 }
-    ].forEach(({ key, label, min, max }) => {
+    PLAYER_SKILL_TIER_PRESETS.forEach(({ key, label, min, max, icon: iconPath }) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = `skill-tier-button skill-tier-${key}`;
-        if (key === "t1" || key === "t2") {
-            const icon = document.createElement("span");
-            icon.className = `skill-tier-icon skill-tier-${key}-icon`;
-            icon.innerHTML = key === "t1"
-                ? '<svg viewBox="0 0 32 24" aria-hidden="true" focusable="false"><path class="t1-laurel" d="M4.6 16.5c2.4 1.7 5.1 2.4 8.1 2.1-2.2 1.5-5.3 1.7-9.3.5l1.2-2.6Zm1.1-4.1c2.2 1.6 4.6 2.5 7.2 2.7-2.3 1-5 .7-8.2-.8l1-1.9Zm2-3.5c1.9 1.5 4 2.5 6.2 3-2.3.7-4.8.1-7.4-1.8l1.2-1.2Zm1.6-3.2c1.5 1.5 3.2 2.7 5.1 3.5-2.1.3-4.2-.5-6.2-2.3l1.1-1.2Zm18.1 10.8-1.2 2.6c-4 1.2-7.1 1-9.3-.5 3 .3 5.7-.4 8.1-2.1h2.4Zm-1.1-4.1 1 1.9c-3.2 1.5-5.9 1.8-8.2.8 2.6-.2 5-.9 7.2-2.7Zm-2-3.5 1.2 1.2c-2.6 1.9-5.1 2.5-7.4 1.8 2.2-.5 4.3-1.5 6.2-3Zm-1.6-3.2 1.1 1.2c-2 1.8-4.1 2.6-6.2 2.3 1.9-.8 3.6-2 5.1-3.5Z"/><circle class="t1-globe" cx="16" cy="12" r="5.6"/><path class="t1-globe-shine" d="M12.3 10.4c1-2 3.6-3.2 5.7-2.2-2.1.1-3.7.8-5.7 2.2Z"/><path class="t1-ring" d="M16 5.4a6.6 6.6 0 1 1 0 13.2 6.6 6.6 0 0 1 0-13.2Zm0 2a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Z"/></svg>'
-                : '<svg viewBox="0 0 32 24" aria-hidden="true" focusable="false"><path class="t2-eagle" d="M16 5.3c2.7 3 6.8 3.2 12.1 1-1.3 2.6-3.8 4.2-7.3 4.9 3.1.3 5.5-.1 7.3-1.1-1.5 2.1-4.2 3.5-8.1 4.1 1.8.6 3.8.7 5.9.3-1.9 1.6-4.6 2.3-8.1 2l-1.8 2.7-1.8-2.7c-3.5.3-6.2-.4-8.1-2 2.1.4 4.1.3 5.9-.3-3.9-.6-6.6-2-8.1-4.1 1.8 1 4.2 1.4 7.3 1.1-3.5-.7-6-2.3-7.3-4.9 5.3 2.2 9.4 2 12.1-1Zm0 4.2-2.2 2.4 1.5-.4.7 2.8.7-2.8 1.5.4L16 9.5Z"/><path class="t2-head" d="M16 4.4 18.1 7H14l2-2.6Z"/><path class="t2-star" d="M7.4 4.4 8.3 6l1.8.2-1.3 1.2.4 1.8-1.8-.9-1.7.9.3-1.8-1.3-1.2 1.9-.2.8-1.6Zm17.2 0 .8 1.6 1.9.2L26 7.4l.3 1.8-1.7-.9-1.8.9.4-1.8-1.3-1.2 1.8-.2.9-1.6Z"/></svg>';
-            const text = document.createElement("span");
-            text.textContent = label;
-            button.append(icon, text);
-        } else {
-            button.textContent = label;
-        }
+        const icon = document.createElement("span");
+        icon.className = `skill-tier-icon skill-tier-${key}-icon`;
+        icon.innerHTML = `<img src="${iconPath}" alt="" aria-hidden="true">`;
+        const text = document.createElement("span");
+        text.textContent = label;
+        button.append(icon, text);
         button.addEventListener("click", () => {
             playerFaceitSkillPresetOpen = false;
             applyPlayerSkillRange(ratingStats, min, max);

@@ -2195,6 +2195,7 @@ body.noscope-desktop .desktop-titlebar {
 .google-drive-icon .drive-green { fill:#1e8e3e; }
 .google-drive-icon .drive-yellow { fill:#fbbc04; }
 .google-drive-icon .drive-blue { fill:#4285f4; }
+.github-icon { color:#f4f5f7; }
 .asset-link-card strong { display:block; font-size:.95rem; }
 .asset-link-card small { display:block; margin-top:4px; color:#929ba7; font:.68rem var(--font-mono); letter-spacing:.08em; }
 .assets-modal-actions { display:flex; justify-content:flex-end; padding:15px 24px; border-top:1px solid #2d3138; background:#14161a; }
@@ -2853,7 +2854,7 @@ tr:hover:not(.selected) {
 }
 .entry-guide-row {
     display:grid;
-    grid-template-columns:22px minmax(0,1fr) auto;
+    grid-template-columns:28px minmax(0,1fr) auto;
     align-items:center;
     gap:6px;
     min-height:20px;
@@ -2874,10 +2875,16 @@ tr:hover:not(.selected) {
 .entry-guide-mark {
     display:inline-grid;
     place-items:center;
-    min-width:18px;
-    height:16px;
+    min-width:24px;
+    height:18px;
     color:#8a94a1;
     font:800 .48rem var(--font-mono);
+}
+.entry-guide-mark img {
+    display:block;
+    width:24px;
+    height:18px;
+    object-fit:contain;
 }
 .entry-guide-mark.retired::before {
     content:"";
@@ -2895,23 +2902,20 @@ tr:hover:not(.selected) {
     box-shadow:0 0 0 1px rgba(255,255,255,.18);
 }
 .tier-t1 { color:#ffd66f; }
-.tier-t1 .entry-guide-mark { color:#0f1012; border-radius:2px; background:linear-gradient(180deg,#ffd66f,#ba7d13); box-shadow:0 0 0 1px rgba(255,214,111,.28); }
+.tier-t1 .entry-guide-mark { color:#0f1012; }
 .tier-t1 b { color:#65d99a; }
 .tier-t2 { color:#7fb9f2; }
-.tier-t2 .entry-guide-mark { color:#ffe28b; border-radius:2px; background:linear-gradient(180deg,#194a84,#10243f); box-shadow:0 0 0 1px rgba(127,185,242,.28); }
+.tier-t2 .entry-guide-mark { color:#ffe28b; }
 .tier-t2 b { color:#58c9df; }
 .tier-t3 { color:#cdd4dc; }
-.tier-t3 .entry-guide-mark { color:#171a1f; border-radius:2px; background:linear-gradient(180deg,#e4e8ed,#8b96a3); }
+.tier-t3 .entry-guide-mark { color:#171a1f; }
 .tier-t3 b { color:#58c9df; }
 .tier-t4 { color:#c8925d; }
-.tier-t4 .entry-guide-mark { color:#21160f; border-radius:2px; background:linear-gradient(180deg,#d9985a,#86532a); }
+.tier-t4 .entry-guide-mark { color:#21160f; }
 .tier-t4 b { color:#ff6875; }
 .tier-nn { color:#8d98a7; }
 .tier-nn .entry-guide-mark {
     color:#c9d1dc;
-    border-radius:2px;
-    background:linear-gradient(180deg,#252a31,#15191f);
-    box-shadow:0 0 0 1px rgba(141,152,167,.32);
 }
 .tier-nn b { color:#ff6875; }
 .faceit-base,
@@ -3419,45 +3423,20 @@ tr:hover:not(.selected) {
     display:inline-grid;
     place-items:center;
     flex:none;
-    width:25px;
+    width:22px;
     align-self:stretch;
     height:auto;
-    margin-left:-3px;
+    margin-left:-2px;
     transform:none;
     line-height:1;
 }
-.skill-tier-icon svg {
+.skill-tier-icon img {
     display:block;
-    width:25px;
-    height:19px;
-    overflow:visible;
+    width:22px;
+    height:22px;
+    object-fit:contain;
     filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
     transform:none;
-}
-.skill-tier-t1-icon {
-    transform:translateY(-2px);
-}
-.skill-tier-t2-icon {
-    transform:none;
-}
-.skill-tier-t1-icon .t1-laurel,
-.skill-tier-t1-icon .t1-ring {
-    fill:#f5bd2a;
-}
-.skill-tier-t1-icon .t1-globe {
-    fill:#358bdc;
-}
-.skill-tier-t1-icon .t1-globe-shine {
-    fill:#a9dcff;
-    opacity:.9;
-}
-.skill-tier-t2-icon .t2-wing,
-.skill-tier-t2-icon .t2-star {
-    fill:#f4c34b;
-}
-.skill-tier-t2-icon .t2-eagle,
-.skill-tier-t2-icon .t2-head {
-    fill:#d99b18;
 }
 .skill-randomizer .skill-tier-t2 {
     border-color:#3f72b5;
