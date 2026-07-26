@@ -1,6 +1,6 @@
 {
   "name": "noscope",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "private": true,
   "description": "NoScope desktop app for editing Esports Manager .emdb databases.",
   "main": "electron/main.cjs",

@@ -342,6 +342,8 @@ let currentAssetKey = null;
 let pendingAsset = undefined;
 let remoteAssetManifest = null;
 let remoteAssetBaseUrl = "https://noscope-assets.pages.dev";
+let remoteLibraryDatabases = [];
+let remoteManifestLoadPromise = null;
 const remoteAssetCacheRequests = new Set();
 let editorMissingRequiredColumns = new Set();
 let teamRosterOriginal = [];
@@ -379,6 +381,7 @@ const capabilities = {
 
 // UI Elements
 const desktopTitlebar = document.getElementById("desktop-titlebar");
+const desktopAppVersion = document.getElementById("desktop-app-version");
 const btnWindowMinimize = document.getElementById("btn-window-minimize");
 const btnWindowMaximize = document.getElementById("btn-window-maximize");
 const btnWindowClose = document.getElementById("btn-window-close");
@@ -421,6 +424,12 @@ const btnSubmitEdit = document.getElementById("btn-submit-edit");
 if (capabilities.desktop) {
     document.body.classList.add("noscope-desktop");
     desktopTitlebar?.removeAttribute("aria-hidden");
+    desktopBridge.getAppVersion?.().then(version => {
+        const cleanVersion = String(version || "").trim();
+        if (!cleanVersion || !desktopAppVersion) return;
+        desktopAppVersion.textContent = `v${cleanVersion.replace(/^v/i, "")}`;
+        desktopAppVersion.hidden = false;
+    }).catch(error => console.error("Unable to read app version", error));
     btnWindowMinimize?.addEventListener("click", () => desktopBridge.minimizeWindow?.());
     btnWindowMaximize?.addEventListener("click", async () => {
         const maximized = await desktopBridge.toggleMaximizeWindow?.();
@@ -473,6 +482,7 @@ const changelogModal = document.getElementById("changelog-modal");
 const changelogModalContent = document.getElementById("changelog-modal-content");
 const btnCloseChangelog = document.getElementById("btn-close-changelog");
 const btnCloseChangelogFooter = document.getElementById("btn-close-changelog-footer");
+const changelogChannelButtons = Array.from(document.querySelectorAll("[data-changelog-channel]"));
 const changelogReleaseCache = new Map();
 const btnUpdate = document.getElementById("btn-update");
 const updateModal = document.getElementById("update-modal");
@@ -530,15 +540,34 @@ const librarySummaryCache = new Map();
 let activeGuideImageTrigger = null;
 let latestUpdateInfo = null;
 let updateBusy = false;
+let activeChangelogChannel = capabilities.desktop ? "app" : "web";
+
+const CHANGELOG_CHANNELS = {
+    app: {
+        label: "App",
+        index: "changelogs/index.json",
+        loading: "Loading app release archive...",
+        emptyTitle: "No app changelogs yet.",
+        emptyMessage: "App release notes will appear here once they are added."
+    },
+    web: {
+        label: "Webpage",
+        index: "changelogs/web-index.json",
+        loading: "Loading webpage release archive...",
+        emptyTitle: "No webpage changelogs yet.",
+        emptyMessage: "Web-only release notes will appear here when the hosted version gets its own updates."
+    }
+};
 
 function updateUpdateButtonVisibility() {
     if (!btnUpdate) return;
     const showUpdateButton = Boolean(capabilities.updater && latestUpdateInfo?.hasUpdate && latestUpdateInfo?.canInstall);
     btnUpdate.hidden = !showUpdateButton;
-    btnUpdate.title = showUpdateButton ? `Install NoScope v${latestUpdateInfo.latestVersion}` : "";
+    const latestVersion = latestUpdateInfo?.latestVersion;
+    btnUpdate.title = showUpdateButton && latestVersion ? `Install NoScope v${latestVersion}` : "";
     btnUpdate.setAttribute(
         "aria-label",
-        showUpdateButton ? `Install NoScope v${latestUpdateInfo.latestVersion}` : "NoScope update"
+        showUpdateButton && latestVersion ? `Install NoScope v${latestVersion}` : "NoScope update"
     );
 }
 
@@ -721,6 +750,34 @@ function waitForLoadingPaint() {
     return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
+const VISIBLE_IMAGE_LOAD_TIMEOUT_MS = 4500;
+let visibleImageLoadQueue = null;
+
+function beginVisibleImageTracking() {
+    visibleImageLoadQueue = [];
+}
+
+function trackVisibleImageLoad(promise) {
+    if (!visibleImageLoadQueue) return;
+    visibleImageLoadQueue.push(Promise.resolve(promise).catch(() => false));
+}
+
+async function waitForVisibleImages() {
+    const imageLoads = visibleImageLoadQueue || [];
+    visibleImageLoadQueue = null;
+    if (!imageLoads.length) return;
+
+    updateDatabaseLoading(96, `Loading ${imageLoads.length} visible images...`);
+    const completed = Promise.allSettled(imageLoads);
+    const timedOut = new Promise(resolve => {
+        window.setTimeout(() => resolve("timeout"), VISIBLE_IMAGE_LOAD_TIMEOUT_MS);
+    });
+    const result = await Promise.race([completed, timedOut]);
+    if (result === "timeout") {
+        updateDatabaseLoading(99, "Finishing image loading...");
+    }
+}
+
 function readFileAsArrayBufferWithProgress(file, onProgress) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -773,10 +830,103 @@ async function readResponseAsBlobWithProgress(response, onProgress) {
     return new Blob(chunks);
 }
 
+function getRemoteDatabaseUrl(entry) {
+    if (!entry?.remoteUrl) return "";
+    try {
+        const parsed = new URL(entry.remoteUrl);
+        return parsed.protocol === "https:" ? parsed.toString() : "";
+    } catch {
+        return "";
+    }
+}
+
+function getRemoteDatabaseManifestEntries(manifest) {
+    const databases = manifest?.Databases;
+    if (Array.isArray(databases)) return databases;
+    if (!databases || typeof databases !== "object") return [];
+    return Object.entries(databases).map(([key, value]) => {
+        if (typeof value === "string") return { id: key, path: value };
+        if (value && typeof value === "object") return { id: value.id || key, ...value };
+        return null;
+    }).filter(Boolean);
+}
+
+function normalizeRemoteDatabaseEntries(manifest, baseUrl = remoteAssetBaseUrl) {
+    const entries = getRemoteDatabaseManifestEntries(manifest);
+    return entries.map((entry, index) => {
+        if (!entry || typeof entry !== "object") return null;
+        const rawFileName = String(entry.fileName || "").trim();
+        const rawPath = String(entry.path || "").trim();
+        const rawUrl = String(entry.url || "").trim();
+        let fileName = rawFileName;
+
+        if (!fileName && rawPath) {
+            try {
+                fileName = decodeURIComponent(rawPath.split("/").pop() || "");
+            } catch {
+                fileName = rawPath.split("/").pop() || "";
+            }
+        }
+
+        if (!fileName && rawUrl) {
+            try {
+                const parsedUrl = new URL(rawUrl);
+                fileName = decodeURIComponent(parsedUrl.pathname.split("/").pop() || "");
+            } catch {
+                fileName = "";
+            }
+        }
+
+        if (!/\.emdb$/i.test(fileName)) return null;
+
+        const safeBaseUrl = String(baseUrl || remoteAssetBaseUrl).replace(/\/+$/, "");
+        const remotePath = rawPath || `Databases/${encodeURIComponent(fileName)}`;
+        const remoteUrl = rawUrl
+            ? new URL(rawUrl.replace(/^\/+/, ""), `${safeBaseUrl}/`).toString()
+            : new URL(remotePath.replace(/^\/+/, ""), `${safeBaseUrl}/`).toString();
+        const idBase = String(entry.id || fileName.replace(/\.emdb$/i, "") || `database-${index + 1}`)
+            .normalize("NFKC")
+            .toLowerCase();
+        const updated = entry.updated ? new Date(entry.updated) : null;
+
+        return {
+            id: `cloud:${idBase}`,
+            name: String(entry.name || fileName.replace(/\.emdb$/i, "")).trim(),
+            fileName,
+            owner: String(entry.owner || "NoScope Cloud").trim(),
+            sourceUrl: String(entry.sourceUrl || remoteUrl).trim(),
+            remoteUrl,
+            remotePath,
+            remote: true,
+            default: Boolean(entry.default),
+            size: Number(entry.size) || 0,
+            updated: updated instanceof Date && !Number.isNaN(updated.getTime()) ? updated : null
+        };
+    }).filter(entry => entry && getRemoteDatabaseUrl(entry));
+}
+
+function getLibraryDatabaseEntries() {
+    if (!remoteLibraryDatabases.length) return [...LIBRARY_DATABASES];
+    const remoteKeys = new Set(remoteLibraryDatabases.map(entry => normalizeFieldName(entry.fileName || entry.id)));
+    const bundledFallbacks = LIBRARY_DATABASES.filter(entry => !remoteKeys.has(normalizeFieldName(entry.fileName || entry.id)));
+    return [...remoteLibraryDatabases, ...bundledFallbacks];
+}
+
+function getDefaultLibraryDatabaseEntry() {
+    const defaultFileKey = normalizeFieldName(DEFAULT_LIBRARY_DATABASE.fileName);
+    return remoteLibraryDatabases.find(entry => entry.default)
+        || remoteLibraryDatabases.find(entry => normalizeFieldName(entry.fileName) === defaultFileKey)
+        || DEFAULT_LIBRARY_DATABASE;
+}
+
+function ensureRemoteManifestLoaded() {
+    return remoteManifestLoadPromise || Promise.resolve();
+}
+
 async function getLibraryDatabaseSummary(entry) {
     const cached = librarySummaryCache.get(entry.id);
     if (cached) return cached;
-    const path = `data/${entry.fileName}`;
+    const path = getRemoteDatabaseUrl(entry) || `data/${entry.fileName}`;
     const response = await fetch(path, { cache: "no-store" });
     if (!response.ok) throw new Error(`${entry.name} request failed (${response.status})`);
     const lastModified = response.headers.get("Last-Modified");
@@ -798,7 +948,7 @@ async function getLibraryDatabaseSummary(entry) {
     const summary = {
         ...entry,
         path,
-        lastUpdated: lastModified ? new Date(lastModified) : null,
+        lastUpdated: entry.updated || (lastModified ? new Date(lastModified) : null),
         counts
     };
     librarySummaryCache.set(entry.id, summary);
@@ -841,7 +991,7 @@ function createLibraryDatabaseCard(summary) {
     const name = document.createElement("h3");
     name.textContent = summary.name;
     const meta = document.createElement("p");
-    meta.textContent = `by ${summary.owner} · bundled default database · ${summary.fileName}`;
+    meta.textContent = `by ${summary.owner} - ${summary.remote ? "Cloudflare database" : "bundled fallback database"} - ${summary.fileName}`;
     const updated = document.createElement("p");
     updated.className = "library-db-updated";
     updated.textContent = formatLibraryTimestamp(summary.lastUpdated);
@@ -883,7 +1033,7 @@ function createLibraryDatabaseCard(summary) {
     source.href = summary.sourceUrl;
     source.target = "_blank";
     source.rel = "noopener";
-    source.innerHTML = '<span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.41l-8.3 8.3-1.4-1.42 8.29-8.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/></svg></span> EMDB.GG';
+    source.innerHTML = `<span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.41l-8.3 8.3-1.4-1.42 8.29-8.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/></svg></span> ${summary.remote ? "Cloudflare" : "EMDB.GG"}`;
     [download, source].forEach(link => link.addEventListener("click", event => event.stopPropagation()));
     actions.append(download, source);
     card.append(header, stats, actions, hint);
@@ -903,11 +1053,12 @@ function createLibraryDatabaseCard(summary) {
 async function renderLibraryPanel() {
     libraryDatabaseList.innerHTML = '<div class="library-loading">Loading database library...</div>';
     try {
-        const summaries = await Promise.all(LIBRARY_DATABASES.map(entry => getLibraryDatabaseSummary(entry)));
+        await ensureRemoteManifestLoaded();
+        const summaries = await Promise.all(getLibraryDatabaseEntries().map(entry => getLibraryDatabaseSummary(entry)));
         libraryDatabaseList.replaceChildren(...summaries.map(summary => createLibraryDatabaseCard(summary)));
     } catch (error) {
         console.error(error);
-        libraryDatabaseList.innerHTML = '<div class="library-error">Unable to read the bundled databases. Open NoScope through localhost to use the library.</div>';
+        libraryDatabaseList.innerHTML = '<div class="library-error">Unable to read the database library. Check the Cloudflare manifest or open NoScope through localhost for bundled fallbacks.</div>';
     }
 }
 
@@ -1121,12 +1272,28 @@ function createChangelogRelease(release) {
     return details;
 }
 
-function renderChangelogArchive(releases) {
+function updateChangelogTabs() {
+    changelogChannelButtons.forEach(button => {
+        const selected = button.dataset.changelogChannel === activeChangelogChannel;
+        button.classList.toggle("is-active", selected);
+        button.setAttribute("aria-selected", String(selected));
+    });
+}
+
+function getActiveChangelogConfig() {
+    return CHANGELOG_CHANNELS[activeChangelogChannel] || CHANGELOG_CHANNELS.app;
+}
+
+function getDefaultChangelogChannel() {
+    return capabilities.desktop ? "app" : "web";
+}
+
+function renderChangelogArchive(releases, config = getActiveChangelogConfig()) {
     const fragment = document.createDocumentFragment();
     const overview = document.createElement("div");
     overview.className = "changelog-archive-overview";
     const label = document.createElement("span");
-    label.textContent = "Release archive";
+    label.textContent = `${config.label} release archive`;
     const count = document.createElement("strong");
     count.textContent = `${releases.length} ${releases.length === 1 ? "release" : "releases"}`;
     overview.append(label, count);
@@ -1137,6 +1304,17 @@ function renderChangelogArchive(releases) {
     releases.forEach(release => list.appendChild(createChangelogRelease(release)));
     fragment.appendChild(list);
     changelogModalContent.replaceChildren(fragment);
+}
+
+function renderChangelogEmpty(config = getActiveChangelogConfig()) {
+    const empty = document.createElement("div");
+    empty.className = "changelog-empty";
+    const title = document.createElement("strong");
+    title.textContent = config.emptyTitle;
+    const message = document.createElement("p");
+    message.textContent = config.emptyMessage;
+    empty.append(title, message);
+    changelogModalContent.replaceChildren(empty);
 }
 
 function renderChangelogError() {
@@ -1154,13 +1332,15 @@ function renderChangelogError() {
 }
 
 async function renderChangelogPanel() {
+    const config = getActiveChangelogConfig();
+    updateChangelogTabs();
     changelogModalContent.setAttribute("aria-busy", "true");
-    changelogModalContent.innerHTML = '<div class="changelog-loading">Loading release archive...</div>';
+    changelogModalContent.innerHTML = `<div class="changelog-loading">${config.loading}</div>`;
     try {
-        const response = await fetch("changelogs/index.json", { cache: "no-store" });
+        const response = await fetch(config.index, { cache: "no-store" });
         if (!response.ok) throw new Error(`Changelog index request failed (${response.status})`);
         const releases = await response.json();
-        if (!Array.isArray(releases) || !releases.length) throw new Error("Changelog index is empty.");
+        if (!Array.isArray(releases)) throw new Error("Changelog index is not an array.");
         const validReleases = releases.filter(release =>
             release &&
             typeof release.id === "string" &&
@@ -1169,8 +1349,11 @@ async function renderChangelogPanel() {
             typeof release.date === "string" &&
             typeof release.file === "string"
         );
-        if (!validReleases.length) throw new Error("Changelog index has no valid releases.");
-        renderChangelogArchive(validReleases);
+        if (!validReleases.length) {
+            renderChangelogEmpty(config);
+            return;
+        }
+        renderChangelogArchive(validReleases, config);
     } catch (error) {
         console.error(error);
         renderChangelogError();
@@ -1180,6 +1363,7 @@ async function renderChangelogPanel() {
 }
 
 function openChangelogPanel() {
+    activeChangelogChannel = getDefaultChangelogChannel();
     changelogModal.hidden = false;
     btnCloseChangelog.focus();
     renderChangelogPanel();
@@ -1191,6 +1375,14 @@ function closeChangelogPanel() {
 }
 
 btnChangelog.addEventListener("click", openChangelogPanel);
+changelogChannelButtons.forEach(button => {
+    button.addEventListener("click", () => {
+        const nextChannel = button.dataset.changelogChannel;
+        if (!CHANGELOG_CHANNELS[nextChannel] || nextChannel === activeChangelogChannel) return;
+        activeChangelogChannel = nextChannel;
+        renderChangelogPanel();
+    });
+});
 btnCloseChangelog.addEventListener("click", closeChangelogPanel);
 btnCloseChangelogFooter.addEventListener("click", closeChangelogPanel);
 changelogModal.addEventListener("click", event => {
@@ -1703,7 +1895,9 @@ async function loadEMDBFile(file, options = {}) {
         
         updateDatabaseLoading(92, "Building editor...");
         await waitForLoadingPaint();
+        beginVisibleImageTracking();
         buildUI();
+        await waitForVisibleImages();
         updateDatabaseLoading(100, "Database loaded.");
         markDatabaseSaved();
         return true;
@@ -1721,7 +1915,8 @@ async function loadEMDBFile(file, options = {}) {
 }
 
 async function fetchBundledDatabaseBlob(entry = DEFAULT_LIBRARY_DATABASE, onProgress) {
-    const response = await fetch(`data/${entry.fileName}`, { cache: "no-store" });
+    const path = getRemoteDatabaseUrl(entry) || `data/${entry.fileName}`;
+    const response = await fetch(path, { cache: "no-store" });
     if (!response.ok) throw new Error(`${entry.name} request failed (${response.status})`);
     return readResponseAsBlobWithProgress(response, onProgress);
 }
@@ -1743,7 +1938,7 @@ async function loadBundledDatabase(entry = DEFAULT_LIBRARY_DATABASE, triggerButt
         console.error(error);
         setStatus(`Unable to load ${entry.name}.`, "error");
         hideDatabaseLoading();
-        alert(`${entry.name} could not be loaded. Run NoScope through its local web server or app runtime, then try again.`);
+        alert(`${entry.name} could not be loaded. Check your connection or make sure the bundled fallback database is available.`);
         return false;
     } finally {
         hideDatabaseLoading();
@@ -1753,7 +1948,8 @@ async function loadBundledDatabase(entry = DEFAULT_LIBRARY_DATABASE, triggerButt
 }
 
 async function loadDefaultDatabase(triggerButton = btnLoadDefault) {
-    return loadBundledDatabase(DEFAULT_LIBRARY_DATABASE, triggerButton);
+    await ensureRemoteManifestLoaded();
+    return loadBundledDatabase(getDefaultLibraryDatabaseEntry(), triggerButton);
 }
 
 fileInput.addEventListener("change", async (e) => {
@@ -1828,7 +2024,9 @@ folderInput.addEventListener("change", async (e) => {
         
         updateDatabaseLoading(92, "Building editor...");
         await waitForLoadingPaint();
+        beginVisibleImageTracking();
         buildUI();
+        await waitForVisibleImages();
         updateDatabaseLoading(100, "Database loaded.");
         markDatabaseSaved();
     } catch (err) {
@@ -3139,7 +3337,7 @@ function createRowElement(rowData, rIndex) {
     if (supportsImage) {
         const media = document.createElement("div");
         media.className = "card-media";
-        media.innerHTML = "<span>No image</span>";
+        setImageLoadingPlaceholder(media);
         card.appendChild(media);
         loadCardAsset(media, getAssetKey(activeTab, rowData), getBundledAssetCandidates(activeTab, rowData));
     }
@@ -3184,7 +3382,7 @@ function createEntityCard(row, rIndex) {
     const title = titleField?.value || `New ${activeTab.replace(/s$/i, "")}`;
     const media = document.createElement("div");
     media.className = "player-card-media";
-    media.innerHTML = "<span>No image</span>";
+    setImageLoadingPlaceholder(media);
     loadCardAsset(media, getAssetKey(activeTab, row), getBundledAssetCandidates(activeTab, row));
     const shade = document.createElement("div");
     shade.className = "player-card-shade";
@@ -3543,7 +3741,7 @@ function createPlayerCard(row, rIndex) {
     const birthDate = getRowValue(row, ["dateofbirth", "birthdate", "dob"]);
     const media = document.createElement("div");
     media.className = "player-card-media";
-    media.innerHTML = "<span>No image</span>";
+    setImageLoadingPlaceholder(media);
     loadCardAsset(media, getAssetKey(activeTab, row), getBundledAssetCandidates(activeTab, row));
     const shade = document.createElement("div");
     shade.className = "player-card-shade";
@@ -4263,7 +4461,8 @@ function normalizeRemoteAssetManifest(manifest) {
     return {
         version: typeof manifest.version === "string" ? manifest.version : "",
         baseUrl: typeof manifest.baseUrl === "string" ? manifest.baseUrl : remoteAssetBaseUrl,
-        assets: normalized
+        assets: normalized,
+        databases: normalizeRemoteDatabaseEntries(manifest, typeof manifest.baseUrl === "string" ? manifest.baseUrl : remoteAssetBaseUrl)
     };
 }
 
@@ -4272,10 +4471,13 @@ function applyRemoteAssetManifest(manifest) {
     if (!normalized) return false;
     remoteAssetManifest = normalized.assets;
     remoteAssetBaseUrl = normalized.baseUrl.replace(/\/+$/, "") || remoteAssetBaseUrl;
+    remoteLibraryDatabases = normalized.databases;
     return true;
 }
 
 async function loadRemoteAssetManifest() {
+    if (remoteManifestLoadPromise) return remoteManifestLoadPromise;
+    remoteManifestLoadPromise = (async () => {
     try {
         const cached = JSON.parse(localStorage.getItem(REMOTE_ASSET_MANIFEST_CACHE_KEY) || "null");
         applyRemoteAssetManifest(cached);
@@ -4293,6 +4495,12 @@ async function loadRemoteAssetManifest() {
         if (!editModal.hidden && editingRowIndex >= 0) prepareAssetEditor();
     } catch (error) {
         console.warn("Unable to load remote asset manifest", error);
+    }
+    })();
+    try {
+        await remoteManifestLoadPromise;
+    } finally {
+        remoteManifestLoadPromise = null;
     }
 }
 
@@ -4414,40 +4622,77 @@ function getBundledAssetCandidates(tableName, row) {
     return candidates;
 }
 
-function loadFirstAvailableImage(container, candidates, alt = "") {
-    if (!candidates.length) return false;
-    let index = 0;
-    const image = document.createElement("img");
-    image.alt = alt;
-    image.addEventListener("load", () => {
-        cacheRemoteAssetFromUrl(image.src);
-        container.replaceChildren(image);
-    }, { once: true });
-    image.addEventListener("error", () => {
-        index += 1;
-        if (index < candidates.length) image.src = candidates[index];
-    });
-    image.src = candidates[0];
-    return true;
+function createImageLoadingPlaceholder() {
+    const placeholder = document.createElement("span");
+    placeholder.className = "image-loading-placeholder";
+    placeholder.setAttribute("aria-label", "Image loading");
+    return placeholder;
 }
 
-async function loadCardAsset(container, key, bundledCandidates = []) {
-    try {
-        const blob = key ? await AssetDB.get(key) : null;
-        if (blob) {
-            const url = URL.createObjectURL(blob);
-            const image = document.createElement("img");
-            image.alt = "";
-            image.src = url;
-            image.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
-            container.replaceChildren(image);
-            return;
-        }
-        loadFirstAvailableImage(container, bundledCandidates);
-    } catch (error) {
-        console.error("Unable to load local image", error);
-        loadFirstAvailableImage(container, bundledCandidates);
+function setImageLoadingPlaceholder(container) {
+    if (!container.querySelector(".image-loading-placeholder")) {
+        container.replaceChildren(createImageLoadingPlaceholder());
     }
+}
+
+function loadFirstAvailableImage(container, candidates, alt = "") {
+    setImageLoadingPlaceholder(container);
+    if (!candidates.length) return Promise.resolve(false);
+    return new Promise(resolve => {
+        let index = 0;
+        const image = document.createElement("img");
+        image.alt = alt;
+        image.addEventListener("load", () => {
+            cacheRemoteAssetFromUrl(image.src);
+            container.replaceChildren(image);
+            resolve(true);
+        }, { once: true });
+        image.addEventListener("error", () => {
+            index += 1;
+            if (index < candidates.length) {
+                image.src = candidates[index];
+                return;
+            }
+            setImageLoadingPlaceholder(container);
+            resolve(false);
+        });
+        image.src = candidates[0];
+    });
+}
+
+function loadBlobImage(container, blob) {
+    setImageLoadingPlaceholder(container);
+    return new Promise(resolve => {
+        const url = URL.createObjectURL(blob);
+        const image = document.createElement("img");
+        image.alt = "";
+        image.addEventListener("load", () => {
+            URL.revokeObjectURL(url);
+            container.replaceChildren(image);
+            resolve(true);
+        }, { once: true });
+        image.addEventListener("error", () => {
+            URL.revokeObjectURL(url);
+            setImageLoadingPlaceholder(container);
+            resolve(false);
+        }, { once: true });
+        image.src = url;
+    });
+}
+
+function loadCardAsset(container, key, bundledCandidates = []) {
+    const task = (async () => {
+        try {
+            const blob = key ? await AssetDB.get(key) : null;
+            if (blob) return loadBlobImage(container, blob);
+            return loadFirstAvailableImage(container, bundledCandidates);
+        } catch (error) {
+            console.error("Unable to load local image", error);
+            return loadFirstAvailableImage(container, bundledCandidates);
+        }
+    })();
+    trackVisibleImageLoad(task);
+    return task;
 }
 
 function openEditor(rowIndex, isNew = false) {
@@ -6473,7 +6718,7 @@ function createTeamRosterPlayerCard(playersTableName, playerIndex, rosterIndex, 
 
     const media = document.createElement("div");
     media.className = "player-card-media";
-    media.innerHTML = "<span>No image</span>";
+    setImageLoadingPlaceholder(media);
     loadCardAsset(media, getAssetKey(playersTableName, row), getBundledAssetCandidates(playersTableName, row));
 
     const shade = document.createElement("div");
@@ -6961,7 +7206,11 @@ function renderSkillsEditor(table) {
     const ratingStats = stats.filter(field => field.section !== "potential");
     const controls = document.createElement("div");
     controls.className = "skill-randomizer";
-    controls.innerHTML = "<span>RANDOMIZE:</span>";
+    const presetGroup = document.createElement("div");
+    presetGroup.className = "skill-randomizer-presets";
+    const caption = document.createElement("span");
+    caption.textContent = "RANDOMIZE:";
+    presetGroup.appendChild(caption);
     PLAYER_SKILL_TIER_PRESETS.forEach(({ key, label, min, max, icon: iconPath }) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -6977,7 +7226,7 @@ function renderSkillsEditor(table) {
             applyPlayerSkillRange(ratingStats, min, max);
             renderSkillsEditor(table);
         });
-        controls.appendChild(button);
+        presetGroup.appendChild(button);
     });
     const faceitButton = document.createElement("button");
     faceitButton.type = "button";
@@ -6989,10 +7238,14 @@ function renderSkillsEditor(table) {
         applyFaceitSkillPreset(table, ratingStats, playerFaceitSkillPreset);
         renderSkillsEditor(table);
     });
-    controls.appendChild(faceitButton);
+    presetGroup.appendChild(faceitButton);
+    controls.appendChild(presetGroup);
+    const faceitGroup = document.createElement("div");
+    faceitGroup.className = "skill-randomizer-faceit-panel";
     const faceitSelectWrap = document.createElement("label");
     faceitSelectWrap.className = "faceit-elo-picker";
-    faceitSelectWrap.hidden = !playerFaceitSkillPresetOpen;
+    faceitSelectWrap.classList.toggle("is-hidden", !playerFaceitSkillPresetOpen);
+    faceitSelectWrap.setAttribute("aria-hidden", String(!playerFaceitSkillPresetOpen));
     const faceitCaption = document.createElement("span");
     faceitCaption.textContent = "ELO";
     const faceitSelect = document.createElement("select");
@@ -7008,7 +7261,8 @@ function renderSkillsEditor(table) {
         renderSkillsEditor(table);
     });
     faceitSelectWrap.append(faceitCaption, faceitSelect);
-    controls.appendChild(faceitSelectWrap);
+    faceitGroup.appendChild(faceitSelectWrap);
+    controls.appendChild(faceitGroup);
     editFormFields.appendChild(controls);
     const hero = document.createElement("section");
     hero.className = "skills-hero";
@@ -7263,7 +7517,7 @@ function createCompareProfile(row, side) {
     profile.className = `compare-profile compare-profile-${side}`;
     const portrait = document.createElement("div");
     portrait.className = "compare-portrait";
-    portrait.innerHTML = "<span>No image</span>";
+    setImageLoadingPlaceholder(portrait);
     loadCardAsset(portrait, getAssetKey(activeTab, row), getBundledAssetCandidates(activeTab, row));
     const info = document.createElement("div");
     const nickname = getPlayerValue(row, ["nickname", "nick", "name"]) || "Unknown player";

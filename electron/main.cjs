@@ -427,6 +427,7 @@ ipcMain.handle("dialog:save-emdb", async (_event, payload) => {
     }
 });
 
+ipcMain.handle("app:get-version", () => app.getVersion());
 ipcMain.handle("app:get-default-save-directory", () => getDefaultDatabaseDirectory());
 
 ipcMain.handle("asset:get-custom-root", () => ({

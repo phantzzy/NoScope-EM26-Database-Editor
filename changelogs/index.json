@@ -1,34 +1,18 @@
 [
   {
+    "id": "v2.3.0-app",
+    "title": "NoScope v2.3.0 App",
+    "version": "v2.3.0",
+    "date": "2026-07-26",
+    "file": "changelogs/2026-07-26-v2.3.0-app.md",
+    "current": true
+  },
+  {
     "id": "v2.2.0",
     "title": "NoScope v2.2.0",
     "version": "v2.2.0",
     "date": "2026-07-25",
     "file": "changelogs/2026-07-25-v2.2.0.md",
-    "current": true
-  },
-  {
-    "id": "v2.1.1-hotfix",
-    "title": "NoScope v2.1.1 Hotfix",
-    "version": "v2.1.1",
-    "date": "2026-07-24",
-    "file": "changelogs/2026-07-24-v2.1.1-hotfix.md",
-    "current": false
-  },
-  {
-    "id": "2026-07-24",
-    "title": "NoScope v2.1.0",
-    "version": "v2.1.0",
-    "date": "2026-07-24",
-    "file": "changelogs/2026-07-24-v2.1.0.md",
-    "current": false
-  },
-  {
-    "id": "v2.0.0",
-    "title": "NoScope v2.0.0",
-    "version": "v2.0.0",
-    "date": "2026-07-17",
-    "file": "changelogs/2026-07-17-v2.0.0.md",
     "current": false
   }
 ]

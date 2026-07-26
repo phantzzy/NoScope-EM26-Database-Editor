@@ -19,8 +19,13 @@
         <div class="desktop-titlebar-brand">
             <img src="assets/branding/NoScopeIcon.png" alt="" aria-hidden="true">
             <span>NoScope</span>
+            <small id="desktop-app-version" class="desktop-app-version" hidden></small>
         </div>
         <div class="desktop-window-actions" aria-label="Window controls">
+            <button class="desktop-update-button" id="btn-update" type="button" data-desktop-capability="updater" hidden>
+                <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 7.75 6h-2.08A6 6 0 1 0 16.9 15H14v-2h6v6h-2v-2.36A8 8 0 1 1 12 4Zm1-1v8h-2V3h2Zm0 8 3.4-3.4 1.42 1.42L12 14.84 6.18 9.02 7.6 7.6 11 11h2Z"/></svg></span>
+                <span>Update</span>
+            </button>
             <button class="desktop-window-button" id="btn-window-minimize" type="button" aria-label="Minimize window" title="Minimize"></button>
             <button class="desktop-window-button maximize" id="btn-window-maximize" type="button" aria-label="Maximize window" title="Maximize"></button>
             <button class="desktop-window-button close" id="btn-window-close" type="button" aria-label="Close window" title="Close"></button>
@@ -70,10 +75,10 @@
                         <span class="brand-external-mark discord" aria-hidden="true"></span>
                         <span class="brand-external-link-label">Discord</span>
                     </a>
-                    <button class="brand-external-link update-available-link" id="btn-update" type="button" data-desktop-capability="updater" hidden>
-                        <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 7.75 6h-2.08A6 6 0 1 0 16.9 15H14v-2h6v6h-2v-2.36A8 8 0 1 1 12 4Zm1-1v8h-2V3h2Zm0 8 3.4-3.4 1.42 1.42L12 14.84 6.18 9.02 7.6 7.6 11 11h2Z"/></svg></span>
-                        <span class="brand-external-link-label">Update</span>
-                    </button>
+                    <a class="brand-external-link" href="https://github.com/phantzzy/NoScope-EM26-Database-Editor" target="_blank" rel="noopener noreferrer" aria-label="NoScope on GitHub" title="NoScope on GitHub">
+                        <span class="brand-external-mark github" aria-hidden="true"></span>
+                        <span class="brand-external-link-label">GitHub</span>
+                    </a>
                 </nav>
             </div>
             <div class="header-actions">
@@ -109,9 +114,9 @@
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 4.5 5v6.2c0 4.7 3 8.5 7.5 10.3 4.5-1.8 7.5-5.6 7.5-10.3V5L12 2.5Zm-1.1 13.2-3.2-3.2 1.5-1.5 1.7 1.7 4-4 1.5 1.5-5.5 5.5Z"/></svg></span>
                     Validate
                 </button>
-                <button class="btn btn-secondary merge-trigger" id="btn-merge-databases" type="button" disabled title="Merge Beta is temporarily disabled while database safety fixes are tested.">
+                <button class="btn btn-secondary merge-trigger" id="btn-merge-databases" type="button" disabled title="Load a base database before merging" aria-disabled="true">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4h11l-3-3 1.4-1.4L22.8 6l-6.4 6.4L15 11l3-3H7V4ZM17 20H6l3 3-1.4 1.4L1.2 18l6.4-6.4L9 13l-3 3h11v4Z"/></svg></span>
-                    Merge <span class="beta-badge">Disabled</span>
+                    Merge
                 </button>
                 <button class="btn btn-secondary" id="btn-undo-merge" type="button" hidden>
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7V3L2 9l7 6v-4c5 0 8.5 1.6 11 5-1-5.2-4.2-9-11-9Z"/></svg></span>
@@ -140,7 +145,18 @@
         <!-- Main Content / Editor -->
         <main class="main-content" id="main-content">
             <div class="empty-state" id="empty-state">
-                <div class="empty-icon" aria-hidden="true">&#128193;</div>
+                <div class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64" focusable="false">
+                        <defs>
+                            <linearGradient id="empty-folder-gradient" x1="12" x2="52" y1="12" y2="54" gradientUnits="userSpaceOnUse">
+                                <stop offset="0" stop-color="#c79a3a"/>
+                                <stop offset="1" stop-color="#7a5524"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M8 17a5 5 0 0 1 5-5h14l6 6h18a5 5 0 0 1 5 5v5H8V17Z"/>
+                        <path d="M7 26h50l-5 26H12L7 26Z"/>
+                    </svg>
+                </div>
                 <h2 id="lbl-empty-title">No EMDB Loaded!</h2>
                 <p id="lbl-empty-desc">Click "Open .emdb..." to get started.</p>
             </div>
@@ -333,7 +349,7 @@
                             <span class="guide-section-label">Start here</span>
                             <h3>Four steps from database to finished file</h3>
                             <ol>
-                                <li><strong>Load</strong><span>Open your `.emdb`, choose a bundled Library database, load the default, or open a CSV folder.</span></li>
+                                <li><strong>Load</strong><span>Open your `.emdb`, choose a Library database, load the default, or open a CSV folder.</span></li>
                                 <li><strong>Choose</strong><span>Open Players, Sponsors, Staff, Teams, or Tournaments and switch between card and list views.</span></li>
                                 <li><strong>Edit</strong><span>Search, filter, select an entry, and use its pencil button. Add, remove, compare, or mass edit where available.</span></li>
                                 <li><strong>Check and save</strong><span>Run Validate, review any findings, then save the game-ready `.emdb` package.</span></li>
@@ -360,22 +376,22 @@
                             <header><span>01</span><div><h3>Databases And Saving</h3><p>Load, check, save, and export database packages.</p></div></header>
                             <figure class="guide-screenshot">
                                 <button class="guide-screenshot-link" type="button" aria-label="Preview the database toolbar screenshot">
-                                    <img class="guide-screenshot-image" src="assets/guide/database-toolbar.png" alt="NoScope database loading, validation, disabled merge, saving, and export toolbar">
+                                    <img class="guide-screenshot-image" src="assets/guide/database-toolbar.png" alt="NoScope database loading, validation, merge, saving, and export toolbar">
                                 </button>
-                                <figcaption>Screenshot 2: database loading, validation, disabled merge, saving, export, and file status controls.</figcaption>
+                                <figcaption>Screenshot 2: database loading, validation, merge, saving, export, and file status controls.</figcaption>
                             </figure>
                             <div class="guide-section-grid">
                                 <article>
                                     <h4>Open a database</h4>
-                                    <p><strong>Open .emdb</strong> loads a local package. <strong>Library</strong> offers bundled databases, while <strong>Load Default DB</strong> opens the NoScope default. CSV folders remain available for loose-table work.</p>
+                                    <p><strong>Open .emdb</strong> loads a local package. <strong>Library</strong> offers cloud databases with local fallbacks, while <strong>Load Default DB</strong> opens the NoScope default. CSV folders remain available for loose-table work.</p>
                                 </article>
                                 <article>
                                     <h4>Save and export</h4>
                                     <p><strong>Save as .emdb</strong> builds the encrypted game-ready package. <strong>Export CSVs</strong> creates a ZIP of the editable table files. Unsaved-change prompts appear before replacing the current database.</p>
                                 </article>
                                 <article>
-                                    <h4>Merge disabled</h4>
-                                    <p>Merge Beta is paused while database safety fixes are tested. Keep using separate backups before saving edited .emdb packages.</p>
+                                    <h4>Merge databases</h4>
+                                    <p><strong>Merge</strong> opens the database merge workflow. Review the proposed adds and updates before applying them, then save the result under a new filename.</p>
                                 </article>
                                 <article>
                                     <h4>Backups</h4>
@@ -564,6 +580,10 @@
                     <div><span class="eyebrow">NoScope changelog</span><h2 id="changelog-modal-title">RELEASE ARCHIVE</h2></div>
                     <button class="icon-button" id="btn-close-changelog" type="button" aria-label="Close changelog">&times;</button>
                 </header>
+                <div class="changelog-source-tabs" role="tablist" aria-label="Changelog type">
+                    <button class="changelog-source-tab is-active" id="changelog-tab-app" type="button" role="tab" aria-selected="true" aria-controls="changelog-modal-content" data-changelog-channel="app">App</button>
+                    <button class="changelog-source-tab" id="changelog-tab-web" type="button" role="tab" aria-selected="false" aria-controls="changelog-modal-content" data-changelog-channel="web">Webpage</button>
+                </div>
                 <div class="changelog-modal-content" id="changelog-modal-content" aria-live="polite">
                     <div class="changelog-loading">Loading changelog...</div>
                 </div>

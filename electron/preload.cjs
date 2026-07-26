@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("noscopeDesktop", {
     platform: process.platform,
+    getAppVersion: () => ipcRenderer.invoke("app:get-version"),
     getDefaultSaveDirectory: () => ipcRenderer.invoke("app:get-default-save-directory"),
     minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
     toggleMaximizeWindow: () => ipcRenderer.invoke("window:toggle-maximize"),
