@@ -1,5 +1,4 @@
 const MERGE_TABLE_ORDER = ["Players", "Teams", "Staff", "Sponsors", "Tournaments"];
-const MERGE_FEATURE_ENABLED = true;
 const MERGE_PLAYER_GROUPS = [
     ["identity", "Identity and nationality"],
     ["team", "Teams and roster positions"],
@@ -105,13 +104,6 @@ function cloneMergeValue(value) {
 }
 
 function updateMergeAvailability() {
-    if (!MERGE_FEATURE_ENABLED) {
-        btnMergeDatabases.disabled = true;
-        btnMergeDatabases.title = "Merge Beta is temporarily disabled while database safety issues are fixed.";
-        btnMergeDatabases.setAttribute("aria-disabled", "true");
-        return;
-    }
-
     const loaded = Boolean(db?.tables && Object.keys(db.tables).length);
     btnMergeDatabases.disabled = !loaded;
     btnMergeDatabases.title = loaded
@@ -1446,10 +1438,6 @@ function renderMergeModal(options = {}) {
 }
 
 function openMergeModal() {
-    if (!MERGE_FEATURE_ENABLED) {
-        setStatus("Merge Beta is temporarily disabled.", "error");
-        return;
-    }
     if (!db?.tables || !Object.keys(db.tables).length) return;
     mergeState = createEmptyMergeState();
     mergeModal.hidden = false;

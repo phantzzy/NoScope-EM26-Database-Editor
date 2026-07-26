@@ -42,7 +42,7 @@ internal static class Program
 internal sealed class InstallerForm : Form
 {
     private const string AppName = "NoScope";
-    private const string AppVersion = "2.2.1";
+    private const string AppVersion = "2.3.0";
     private const int TitleBarHeight = 40;
     private static readonly Color AppBackground = Color.FromArgb(13, 15, 22);
     private static readonly Color SidebarBackground = Color.FromArgb(8, 10, 15);
