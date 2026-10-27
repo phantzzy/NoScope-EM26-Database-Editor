@@ -156,6 +156,8 @@ const teamListViewPresets = {
 };
 const TEAM_MAP_OPTIONS = Object.freeze([
     { value: "ancient", label: "Ancient" },
+    { value: "anubis", label: "Anubis" },
+    { value: "cache", label: "Cache" },
     { value: "dust", label: "Dust" },
     { value: "inferno", label: "Inferno" },
     { value: "mirage", label: "Mirage" },
@@ -163,6 +165,7 @@ const TEAM_MAP_OPTIONS = Object.freeze([
     { value: "overpass", label: "Overpass" },
     { value: "train", label: "Train" }
 ]);
+const TEAM_MAP_FIELD_NAMES = ["fpmap", "spmap", "tpmap", "fbmap", "sbmap", "tbmap"];
 const TEAM_IDENTITY_FIELD_NAMES = new Set([
     "ers",
     "academy",
@@ -175,6 +178,11 @@ const TEAM_IDENTITY_FIELD_NAMES = new Set([
     "igl",
     "fpmap",
     "fbmap",
+    "spmap",
+    "tpmap",
+    "sbmap",
+    "tbmap",
+    "female",
     "disbanded"
 ]);
 const listViewStates = {
@@ -1777,6 +1785,8 @@ async function decryptEMDB(arrayBuffer) {
         throw new Error("Invalid .emdb file (bad magic bytes).");
     }
     
+    if (data.length < 33) throw new Error("Invalid .emdb file (truncated header or encrypted data).");
+    if (data[4] !== 3) throw new Error(`Unsupported EMDB version ${data[4]}. This editor supports version 3.`);
     const iv = data.slice(5, 17);
     const ciphertextAndTag = data.slice(17);
     
@@ -1855,38 +1865,11 @@ async function loadEMDBFile(file, options = {}) {
         const jszip = new JSZip();
         const zip = await jszip.loadAsync(decryptedZipBuffer);
         
-        db.tables = {};
+        const loadedDatabase = await DatabasePackage.read(zip, Papa, (progress, name) => {
+            updateDatabaseLoading(52 + progress * 34, `Loading ${name}...`);
+        });
+        db = loadedDatabase;
         invalidatePlayerLeaderboardRanks();
-        const packageFiles = TABLE_FILES.filter(fname => zip.file(fname));
-        const parseSteps = packageFiles.length + (zip.file(ROSTER_FILE) ? 1 : 0);
-        let parsedSteps = 0;
-        for (const fname of TABLE_FILES) {
-            const tableName = fname.replace(".csv", "");
-            const fileObj = zip.file(fname);
-            if (fileObj) {
-                const text = await fileObj.async("text", metadata => {
-                    const tableProgress = (parsedSteps + (metadata.percent / 100)) / Math.max(parseSteps, 1);
-                    updateDatabaseLoading(52 + (tableProgress * 34), `Loading ${tableName}...`);
-                });
-                const parsed = Papa.parse(text, { skipEmptyLines: true });
-                db.tables[tableName] = {
-                    header: parsed.data[0] || [],
-                    rows: parsed.data.slice(1) || []
-                };
-                parsedSteps++;
-                updateDatabaseLoading(52 + ((parsedSteps / Math.max(parseSteps, 1)) * 34), `Loaded ${tableName}.`);
-            }
-        }
-        
-        const rosterObj = zip.file(ROSTER_FILE);
-        if (rosterObj) {
-            const text = await rosterObj.async("text", metadata => {
-                const rosterProgress = (parsedSteps + (metadata.percent / 100)) / Math.max(parseSteps, 1);
-                updateDatabaseLoading(52 + (rosterProgress * 34), "Loading roster order...");
-            });
-            db.roster_order = JSON.parse(text);
-            parsedSteps++;
-        }
         
         db.fileName = file.name;
         setStatus(`Loaded: ${file.name}`, "success");
@@ -1975,45 +1958,24 @@ folderInput.addEventListener("change", async (e) => {
     showDatabaseLoading("Loading CSV folder...");
     await waitForLoadingPaint();
     setStatus("Loading folder...", "loading");
-    db.tables = {};
-    invalidatePlayerLeaderboardRanks();
-    
     try {
-        const loadableFiles = Array.from(files).filter(file => TABLE_FILES.includes(file.name) || file.name === ROSTER_FILE);
-        const totalBytes = loadableFiles.reduce((sum, file) => sum + file.size, 0) || 1;
+        const zip = new JSZip();
+        const totalBytes = Array.from(files).reduce((total, file) => total + file.size, 0) || 1;
         let completedBytes = 0;
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const fname = file.name;
-            
-            if (TABLE_FILES.includes(fname)) {
-                const tableName = fname.replace(".csv", "");
-                const text = await readFileAsTextWithProgress(file, progress => {
-                    updateDatabaseLoading(
-                        ((completedBytes + (file.size * progress / 100)) / totalBytes) * 82,
-                        `Loading ${tableName}...`
-                    );
-                });
-                const parsed = Papa.parse(text, { skipEmptyLines: true });
-                db.tables[tableName] = {
-                    header: parsed.data[0] || [],
-                    rows: parsed.data.slice(1) || []
-                };
-                completedBytes += file.size;
-            }
-            
-            if (fname === ROSTER_FILE) {
-                const text = await readFileAsTextWithProgress(file, progress => {
-                    updateDatabaseLoading(
-                        ((completedBytes + (file.size * progress / 100)) / totalBytes) * 82,
-                        "Loading roster order..."
-                    );
-                });
-                db.roster_order = JSON.parse(text);
-                completedBytes += file.size;
-            }
+        for (const file of Array.from(files)) {
+            const relativePath = file.webkitRelativePath || file.name;
+            const name = relativePath.includes("/") ? relativePath.slice(relativePath.indexOf("/") + 1) : relativePath;
+            zip.file(name, await readFileAsArrayBufferWithProgress(file, progress => {
+                updateDatabaseLoading((completedBytes + file.size * progress / 100) / totalBytes * 70, `Loading ${file.name}...`);
+            }));
+            completedBytes += file.size;
         }
-        
+        const loadedDatabase = await DatabasePackage.read(zip, Papa, (progress, name) => {
+            updateDatabaseLoading(70 + progress * 16, `Reading ${name}...`);
+        });
+        db = loadedDatabase;
+        invalidatePlayerLeaderboardRanks();
+
         const pathParts = files[0].webkitRelativePath.split('/');
         const folderName = pathParts.length > 1 ? pathParts[0] : "Folder";
         
@@ -2729,7 +2691,7 @@ function getSerializableTableRows(tableName, table) {
 function normalizeTeamDraftForSave(table) {
     const mapFields = table.header
         .map((label, index) => ({ index, name: normalizeFieldName(label), label }))
-        .filter(field => ["fpmap", "fbmap"].includes(field.name));
+        .filter(field => TEAM_MAP_FIELD_NAMES.includes(field.name));
     for (const field of mapFields) {
         const value = String(editDraft[field.index] ?? "").trim();
         if (!value) continue;
@@ -3003,28 +2965,72 @@ function getTeamAliasSetForList(table, row) {
         .flatMap(field => [field.value.normalize("NFKC").toLowerCase(), normalizeFieldName(field.value)]));
 }
 
-function getTeamRosterEntriesForList(teamTable, teamRow) {
-    const playersTableName = Object.keys(db.tables).find(name => name.toLowerCase() === "players");
-    const playersTable = playersTableName ? db.tables[playersTableName] : null;
+function getRosterPlayerId(table, row) {
+    return getTableValue(table, row, ["internalid", "playerid", "id", "nickname", "nick"]);
+}
+
+function getTeamRosterKey(table, row) {
+    const aliases = getTeamAliasSetForList(table, row);
+    return Object.keys(db.roster_order || {}).find(key => aliases.has(key.normalize("NFKC").toLowerCase())) || "";
+}
+
+function getTeamRosterSlots(teamTable, teamRow) {
+    const playersTable = db.tables[Object.keys(db.tables).find(name => name.toLowerCase() === "players")];
     if (!playersTable) return [];
     const aliases = getTeamAliasSetForList(teamTable, teamRow);
-    if (!aliases.size) return [];
     const teamColumns = playersTable.header.map((header, index) => ({ name: normalizeFieldName(header), index }))
         .filter(field => ["team", "teamname", "teamid"].includes(field.name));
-    if (!teamColumns.length) return [];
-    const positionIndex = playersTable.header.findIndex(header => normalizeFieldName(header) === "rosterposition");
-    const roster = playersTable.rows.map((row, index) => {
-        const position = positionIndex >= 0 ? String(row[positionIndex] || "").toLowerCase() : "";
-        return { row, index, position };
-    }).filter(entry => teamColumns.some(field => {
-        const value = String(entry.row[field.index] || "").trim();
-        return aliases.has(value.normalize("NFKC").toLowerCase()) || aliases.has(normalizeFieldName(value));
-    })).sort((a, b) => Number(a.position.includes("bench")) - Number(b.position.includes("bench")) || a.index - b.index);
-    return roster.map((entry, rosterIndex) => ({
-        row: entry.row,
-        index: entry.index,
-        isBench: rosterIndex >= 5
-    }));
+    const members = playersTable.rows.map((row, index) => ({ row, index }))
+        .filter(entry => teamColumns.some(field => aliases.has(String(entry.row[field.index] || "").trim().normalize("NFKC").toLowerCase())));
+    const key = getTeamRosterKey(teamTable, teamRow);
+    const order = key ? db.roster_order[key] : [];
+    const slots = [];
+    const used = new Set();
+    for (const id of order) {
+        if (id === null || id === "") { slots.push(null); continue; }
+        const entry = members.find(member => !used.has(member.index) && getRosterPlayerId(playersTable, member.row) === id);
+        // Stale references never move players between teams or invent records.
+        if (!entry) { slots.push(null); continue; }
+        slots.push(entry.index);
+        used.add(entry.index);
+    }
+    if (order.some(id => id) && !used.size) slots.length = 0;
+    const remaining = members.filter(entry => !used.has(entry.index));
+    const isBench = entry => /bench/i.test(getTableValue(playersTable, entry.row, ["rosterposition"]));
+    remaining.filter(entry => !isBench(entry)).forEach(entry => slots.push(entry.index));
+    const bench = remaining.filter(isBench);
+    if (bench.length) {
+        while (slots.length < 5) slots.push(null);
+        slots.push(...bench.map(entry => entry.index));
+    }
+    return slots;
+}
+
+function getTeamRosterEntriesForList(teamTable, teamRow) {
+    const playersTable = db.tables[Object.keys(db.tables).find(name => name.toLowerCase() === "players")];
+    return getTeamRosterSlots(teamTable, teamRow).map((index, slot) => Number.isInteger(index)
+        ? { row: playersTable.rows[index], index, isBench: slot >= 5 } : null).filter(Boolean);
+}
+
+function updatePlayerRosterReferences(table, previousRow, nextRow) {
+    const oldId = getRosterPlayerId(table, previousRow);
+    if (!oldId) return;
+    const nextId = nextRow ? getRosterPlayerId(table, nextRow) : "";
+    const sameTeam = nextRow && getTableValue(table, previousRow, ["team", "teamname", "teamid"]) === getTableValue(table, nextRow, ["team", "teamname", "teamid"]);
+    for (const [key, order] of Object.entries(db.roster_order || {})) {
+        if (!order.includes(oldId)) continue;
+        // Keep main/bench slot boundaries when a player leaves.
+        db.roster_order[key] = order.map(id => id === oldId ? (sameTeam && nextId ? nextId : "") : id);
+    }
+}
+
+function removeRecordRosterReferences(tableName, row) {
+    const table = db.tables[tableName];
+    if (tableName.toLowerCase() === "players") updatePlayerRosterReferences(table, row, null);
+    if (tableName.toLowerCase() === "teams") {
+        const key = getTeamRosterKey(table, row);
+        if (key) delete db.roster_order[key];
+    }
 }
 
 function createTeamListIdentityCell(tableName, row, label) {
@@ -4277,7 +4283,7 @@ function applyMassEdit() {
             row[change.index] = String(value);
         });
         changes.statusChanges.forEach(change => {
-            row[change.index] = change.value === "true" ? "True" : "False";
+            row[change.index] = formatBooleanFieldValue(row[change.index], change.value === "true");
         });
         if (ratingIndex >= 0) row[ratingIndex] = calculatePlayerRatingForTable(table, row).toFixed(2);
     });
@@ -5092,7 +5098,7 @@ function renderEditorFields() {
         "team", "teamid", "rosterposition", "role", "role1", "role2", "role3",
         "earnings", "pr", "rating", "ers", "academy", "bgcolor", "bgcolour",
         "backgroundcolor", "backgroundcolour", "startigl", "startingigl", "igl",
-        "fpmap", "fbmap", "status", "disbanded"
+        "fpmap", "fbmap", "spmap", "sbmap", "tpmap", "tbmap", "female", "status", "disbanded"
     ];
     const visibleFields = table.header.map((label, index) => ({ label, index }))
         .filter(field => !isTabbedEditor || getEditorFieldSection(field.label, isTeamEditor) === targetSection)
@@ -5129,12 +5135,12 @@ function renderEditorFields() {
             editFormFields.appendChild(createTeamStartIglField(label, index));
             return;
         }
-        if (normalizedLabel === "disbanded") {
+        if (["disbanded", "female"].includes(normalizedLabel)) {
             editFormFields.appendChild(createBooleanSegmentedField(label, index, "Yes", "No"));
             return;
         }
         if (activeTab.toLowerCase() === "tournaments" && normalizedLabel === "tier") {
-            editFormFields.appendChild(createFixedSelectField(label, index, ["1", "2", "MAJOR"]));
+            editFormFields.appendChild(createFixedSelectField(label, index, ["1", "2", "3", "4", "MAJOR"]));
             return;
         }
         if (activeTab.toLowerCase() === "tournaments" && normalizedLabel === "type") {
@@ -5157,7 +5163,7 @@ function renderEditorFields() {
             editFormFields.appendChild(createColorPickerField(label, index));
             return;
         }
-        if (activeTab.toLowerCase() === "teams" && ["fpmap", "fbmap"].includes(normalizedLabel)) {
+        if (activeTab.toLowerCase() === "teams" && TEAM_MAP_FIELD_NAMES.includes(normalizedLabel)) {
             editFormFields.appendChild(createTeamMapField(label, index));
             return;
         }
@@ -5240,9 +5246,9 @@ function renderEditorFields() {
             button.type = "button";
             button.className = `player-status-button status-${normalizedLabel}`;
             button.dataset.column = index;
-            button.value = /^(true|1|yes)$/i.test(String(editDraft[index] ?? "")) ? "True" : "False";
-            button.classList.toggle("active", button.value === "True");
-            button.setAttribute("aria-pressed", String(button.value === "True"));
+            button.value = String(editDraft[index] ?? "");
+            button.classList.toggle("active", isTruthyFlagValue(button.value));
+            button.setAttribute("aria-pressed", String(isTruthyFlagValue(button.value)));
             const icon = document.createElement("span");
             icon.className = "player-status-icon";
             icon.textContent = normalizedLabel === "retired" ? "\u25C8" : "F";
@@ -5250,8 +5256,8 @@ function renderEditorFields() {
             text.textContent = normalizedLabel === "retired" ? "Retired" : "From Faceit";
             button.append(icon, text);
             button.addEventListener("click", () => {
-                const active = button.value !== "True";
-                button.value = active ? "True" : "False";
+                const active = !isTruthyFlagValue(button.value);
+                button.value = formatBooleanFieldValue(editDraft[index], active);
                 button.classList.toggle("active", active);
                 button.setAttribute("aria-pressed", String(active));
             });
@@ -5435,13 +5441,14 @@ function createFixedSelectField(label, index, choices, className = "") {
     const select = document.createElement("select");
     select.dataset.column = index;
     const currentValue = String(editDraft[index] ?? "").trim();
-    choices.forEach(value => {
+    const availableChoices = choices.includes(currentValue) ? choices : [currentValue, ...choices];
+    availableChoices.forEach(value => {
         const option = document.createElement("option");
         option.value = value;
         option.textContent = value;
         select.appendChild(option);
     });
-    select.value = choices.find(value => value.toLowerCase() === currentValue.toLowerCase()) || choices[0];
+    select.value = currentValue;
     decorateEditorFieldRequirement(field, caption, select, activeTab, table, index);
     field.append(caption, select);
     return field;
@@ -5474,7 +5481,13 @@ function createTeamMapField(label, index, className = "") {
     });
 
     const currentValue = String(editDraft[index] ?? "").trim();
-    select.value = currentValue ? normalizeTeamMapValue(currentValue) : "";
+    if (currentValue && !normalizeTeamMapValue(currentValue)) {
+        const option = document.createElement("option");
+        option.value = currentValue;
+        option.textContent = currentValue;
+        select.appendChild(option);
+    }
+    select.value = normalizeTeamMapValue(currentValue) || currentValue;
     decorateEditorFieldRequirement(field, caption, select, activeTab, table, index);
     field.append(caption, select);
     return field;
@@ -5514,6 +5527,10 @@ function createGenderField(label, index, className = "") {
     return field;
 }
 
+function formatBooleanFieldValue(previousValue, active) {
+    return /^(0|1)?$/.test(String(previousValue ?? "")) ? (active ? "1" : "0") : (active ? "True" : "False");
+}
+
 function createBooleanSegmentedField(label, index, trueLabel = "Yes", falseLabel = "No", className = "") {
     const table = db.tables[activeTab];
     const field = document.createElement("div");
@@ -5523,18 +5540,18 @@ function createBooleanSegmentedField(label, index, trueLabel = "Yes", falseLabel
     const input = document.createElement("input");
     input.type = "hidden";
     input.dataset.column = index;
-    input.value = /^(true|1|yes)$/i.test(String(editDraft[index] ?? "")) ? "True" : "False";
+    input.value = String(editDraft[index] ?? "");
     const control = document.createElement("div");
     control.className = "gender-segmented boolean-segmented";
     [[trueLabel, "True"], [falseLabel, "False"]].forEach(([buttonLabel, value]) => {
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = buttonLabel;
-        const selected = input.value === value;
+        const selected = isTruthyFlagValue(input.value) === (value === "True");
         button.classList.toggle("active", selected);
         button.setAttribute("aria-pressed", String(selected));
         button.addEventListener("click", () => {
-            input.value = value;
+            input.value = formatBooleanFieldValue(editDraft[index], value === "True");
             control.querySelectorAll("button").forEach(option => {
                 const active = option === button;
                 option.classList.toggle("active", active);
@@ -5601,7 +5618,7 @@ function createRoleField(label, index, className = "") {
     const normalizedLabel = normalizeFieldName(label);
     const isPlayerRole = activeTab.toLowerCase() === "players" && ["role", "role1", "role2", "role3"].includes(normalizedLabel);
     const roles = isPlayerRole
-        ? ["Entry fragger", "In-game leader", "Lurker", "Rifler", "Support"]
+        ? ["AWPer", "Entry fragger", "In-game leader", "Lurker", "Rifler", "Support"]
         : db.tables[activeTab].rows.map(row => String(row[index] ?? "").trim()).filter(Boolean);
     const choices = ["", currentValue, ...roles]
         .filter((value, choiceIndex, values) => values.findIndex(existing => existing.toLowerCase() === value.toLowerCase()) === choiceIndex)
@@ -6030,7 +6047,7 @@ function renderStaffInfoEditor(table) {
     const infoNames = new Set([
         "nickname", "nick", "name", "firstname", "forename", "surname", "lastname", "gender", "role",
         "team", "teamid", "country", "nationality", "internalid", "id", "type", "rating",
-        "liquipediaurl", "hltvurl", "photourl", "imageurl", "portraiturl"
+        "liquipedia", "hltv", "liquipediaurl", "hltvurl", "photourl", "imageurl", "portraiturl"
     ]);
     const order = ["nickname", "nick", "name", "firstname", "forename", "surname", "lastname", "gender", "role", "team", "country", "nationality", "internalid", "type", "rating", "liquipediaurl", "hltvurl", "photourl", "imageurl"];
     const fields = table.header.map((label, index) => ({ label, index, name: normalizeFieldName(label) }))
@@ -6223,7 +6240,7 @@ function matchesBooleanFilter(value, expected) {
 }
 
 function hasFaceitTag(table, row) {
-    const value = getTableValue(table, row, ["faceit", "fromfaceit", "faceittag"]);
+    const value = getTableValue(table, row, ["fromfaceit", "faceittag", "faceit"]);
     return isTruthyFlagValue(value);
 }
 
@@ -6620,29 +6637,7 @@ function enableTeamRosterPreview(anchor, playersTableName, playerIndex) {
 }
 
 function initializeTeamRoster(teamRow) {
-    const playersTableName = Object.keys(db.tables).find(name => name.toLowerCase() === "players");
-    const playersTable = playersTableName ? db.tables[playersTableName] : null;
-    if (!playersTable) {
-        teamRosterOriginal = [];
-        teamRosterDraft = [];
-        return;
-    }
-    const aliases = new Set(getTeamAliases(teamRow));
-    const teamColumns = playersTable.header.map((header, index) => ({ name: normalizeFieldName(header), index }))
-        .filter(field => ["team", "teamname", "teamid"].includes(field.name));
-    const positionIndex = playersTable.header.findIndex(header => normalizeFieldName(header) === "rosterposition");
-    const rosterEntries = playersTable.rows.map((row, index) => ({
-        index,
-        position: positionIndex >= 0 ? String(row[positionIndex] || "").toLowerCase() : ""
-    })).filter(entry => teamColumns.some(field => aliases.has(String(playersTable.rows[entry.index][field.index] || "").trim().normalize("NFKC").toLowerCase())))
-        .sort((a, b) => Number(a.position.includes("bench")) - Number(b.position.includes("bench")));
-    const mainIndexes = rosterEntries.filter(entry => !entry.position.includes("bench")).map(entry => entry.index);
-    const benchIndexes = rosterEntries.filter(entry => entry.position.includes("bench")).map(entry => entry.index);
-    teamRosterOriginal = [...mainIndexes];
-    if (benchIndexes.length) {
-        while (teamRosterOriginal.length < 5) teamRosterOriginal.push(null);
-        teamRosterOriginal.push(...benchIndexes);
-    }
+    teamRosterOriginal = getTeamRosterSlots(db.tables[activeTab], teamRow);
     teamRosterDraft = [...teamRosterOriginal];
 }
 
@@ -6987,7 +6982,7 @@ function renderTeamRosterEditor() {
     editorFieldCount.textContent = `${rosterMainCount} main - ${rosterBenchCount} bench`;
 }
 
-function applyTeamRosterDraft() {
+function applyTeamRosterDraft(previousTeamRow = editDraft) {
     const playersTableName = Object.keys(db.tables).find(name => name.toLowerCase() === "players");
     if (!playersTableName) return;
     const playersTable = db.tables[playersTableName];
@@ -6995,17 +6990,25 @@ function applyTeamRosterDraft() {
     const valueFor = aliases => getTableValue(teamTable, editDraft, aliases);
     const teamName = valueFor(["nick", "nickname", "abbreviation", "shortname", "name"]);
     const teamId = valueFor(["teamid", "internalid", "id"]) || teamName;
+    const oldTeamName = getTableValue(teamTable, previousTeamRow, ["nick", "nickname", "abbreviation", "shortname", "name"]);
+    if (teamName === oldTeamName && JSON.stringify(teamRosterOriginal) === JSON.stringify(teamRosterDraft)) return;
+    const oldKey = getTeamRosterKey(teamTable, previousTeamRow);
+    db.roster_order ||= {};
+    if (oldKey && oldKey !== teamName) delete db.roster_order[oldKey];
     const affected = new Set([...teamRosterOriginal, ...teamRosterDraft].filter(Number.isInteger));
     const teamFields = playersTable.header.map((header, index) => ({ name: normalizeFieldName(header), index }))
         .filter(field => ["team", "teamname", "teamid", "rosterposition"].includes(field.name));
     affected.forEach(playerIndex => {
         const rosterIndex = teamRosterDraft.indexOf(playerIndex);
+        const previousRow = [...playersTable.rows[playerIndex]];
         teamFields.forEach(field => {
             if (field.name === "rosterposition") playersTable.rows[playerIndex][field.index] = rosterIndex < 0 ? "" : rosterIndex < 5 ? "Main" : "Bench";
             else if (rosterIndex < 0) playersTable.rows[playerIndex][field.index] = "";
             else playersTable.rows[playerIndex][field.index] = field.name === "teamid" ? teamId : teamName;
         });
+        updatePlayerRosterReferences(playersTable, previousRow, playersTable.rows[playerIndex]);
     });
+    db.roster_order[teamName] = teamRosterDraft.map(index => Number.isInteger(index) ? getRosterPlayerId(playersTable, playersTable.rows[index]) : "");
 }
 
 function createPotentialSkillControl(table, field) {
@@ -7083,10 +7086,10 @@ function applyPlayerSkillRange(fields, min, max) {
 }
 
 function markPlayerAsFaceitOrigin(table) {
-    const faceitField = table.header
-        .map((label, index) => ({ index, name: normalizeFieldName(label) }))
-        .find(field => ["fromfaceit", "faceit", "faceittag"].includes(field.name));
-    if (faceitField) editDraft[faceitField.index] = "True";
+    const fields = table.header.map((label, index) => ({ index, name: normalizeFieldName(label) }));
+    const faceitField = ["fromfaceit", "faceittag", "faceit"]
+        .map(name => fields.find(field => field.name === name)).find(Boolean);
+    if (faceitField) editDraft[faceitField.index] = formatBooleanFieldValue(editDraft[faceitField.index], true);
 }
 
 function getFaceitSkillPreset(value) {
@@ -7459,7 +7462,10 @@ btnDeleteRow.addEventListener("click", async () => {
             const assetKey = row ? getAssetKey(activeTab, row) : null;
             if (assetKey) await AssetDB.remove(assetKey).catch(error => console.error("Unable to remove local image", error));
             if (activeTab.toLowerCase() === "players" && row) setContentCreatorPlayer(activeTab, row, rowIndex, false);
-            if (row) db.tables[activeTab].rows.splice(rowIndex, 1);
+            if (row) {
+                removeRecordRosterReferences(activeTab, row);
+                db.tables[activeTab].rows.splice(rowIndex, 1);
+            }
         }
         invalidatePlayerLeaderboardRanks(activeTab);
         updateTabCount(activeTab);
@@ -8104,12 +8110,14 @@ editForm.addEventListener("submit", async event => {
         alert("Enter an Internal ID, ID, nickname, or name before saving an image.");
         return;
     }
+    const previousRow = db.tables[activeTab].rows[editingRowIndex];
     db.tables[activeTab].rows[editingRowIndex] = [...editDraft];
+    if (activeTab.toLowerCase() === "players") updatePlayerRosterReferences(db.tables[activeTab], previousRow, editDraft);
     if (activeTab.toLowerCase() === "players") {
         setContentCreatorPlayer(activeTab, editDraft, editingRowIndex, contentCreatorDraft, currentContentCreatorKey);
     }
     invalidatePlayerLeaderboardRanks(activeTab);
-    if (activeTab.toLowerCase() === "teams") applyTeamRosterDraft();
+    if (activeTab.toLowerCase() === "teams") applyTeamRosterDraft(previousRow);
     if (nextAssetKey) {
         if (pendingAsset instanceof Blob) {
             await AssetDB.put(nextAssetKey, pendingAsset);
@@ -8322,7 +8330,7 @@ async function saveEmdbBlob(blob, suggestedName) {
 }
 
 async function saveCurrentDatabase() {
-    if (!db.roster_order) {
+    if (!Object.keys(db.tables).length) {
         setStatus("No database to save.", "error");
         return false;
     }
@@ -8334,20 +8342,7 @@ async function saveCurrentDatabase() {
     setStatus("Saving...", "loading");
     
     try {
-        const jszip = new JSZip();
-        
-        for (const fname of TABLE_FILES) {
-            const tableName = fname.replace(".csv", "");
-            if (db.tables[tableName]) {
-                const csvContent = Papa.unparse({
-                    fields: db.tables[tableName].header,
-                    data: getSerializableTableRows(tableName, db.tables[tableName])
-                }, { delimiter: ";" });
-                jszip.file(fname, "\uFEFF" + csvContent);
-            }
-        }
-        
-        jszip.file(ROSTER_FILE, JSON.stringify(db.roster_order, null, 2));
+        const jszip = await DatabasePackage.write(db, JSZip, Papa, getSerializableTableRows);
         const zipArrayBuffer = await jszip.generateAsync({ type: "arraybuffer", compression: "DEFLATE" });
         const emdbBytes = await encryptEMDB(zipArrayBuffer);
         
@@ -8377,26 +8372,11 @@ btnSave.addEventListener("click", async () => {
 
 // Export CSVs as ZIP (Fallback for browsers that don't support showDirectoryPicker)
 btnExportCsvs.addEventListener("click", async () => {
-    if (!db.roster_order) return;
+    if (!Object.keys(db.tables).length) return;
     setStatus("Zipping CSVs...", "loading");
     
     try {
-        const jszip = new JSZip();
-        
-        for (const fname of TABLE_FILES) {
-            const tableName = fname.replace(".csv", "");
-            if (db.tables[tableName]) {
-                const csvContent = Papa.unparse({
-                    fields: db.tables[tableName].header,
-                    data: getSerializableTableRows(tableName, db.tables[tableName])
-                }, { delimiter: ";" });
-                
-                jszip.file(fname, "\uFEFF" + csvContent);
-            }
-        }
-        
-        jszip.file(ROSTER_FILE, JSON.stringify(db.roster_order, null, 2));
-        
+        const jszip = await DatabasePackage.write(db, JSZip, Papa, getSerializableTableRows);
         const zipBlob = await jszip.generateAsync({ type: "blob", compression: "DEFLATE" });
         
         const url = URL.createObjectURL(zipBlob);

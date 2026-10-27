@@ -614,25 +614,10 @@ async function parseIncomingMergeDatabase(file) {
         const decryptedZipBuffer = await decryptEMDB(arrayBuffer);
         updateDatabaseLoading(48, "Opening incoming database...");
         const zip = await new JSZip().loadAsync(decryptedZipBuffer);
-        const incomingDb = { tables: {}, roster_order: null, fileName: file.name };
-        const files = TABLE_FILES.filter(fileName => zip.file(fileName));
-        const totalSteps = files.length + (zip.file(ROSTER_FILE) ? 1 : 0);
-        let completed = 0;
-        for (const fileName of files) {
-            const tableName = fileName.replace(".csv", "");
-            const text = await zip.file(fileName).async("text", metadata => {
-                const progress = (completed + metadata.percent / 100) / Math.max(totalSteps, 1);
-                updateDatabaseLoading(50 + progress * 42, `Reading incoming ${tableName}...`);
-            });
-            const parsed = Papa.parse(text, { skipEmptyLines: true });
-            incomingDb.tables[tableName] = {
-                header: parsed.data[0] || [],
-                rows: parsed.data.slice(1) || []
-            };
-            completed += 1;
-        }
-        const rosterFile = zip.file(ROSTER_FILE);
-        if (rosterFile) incomingDb.roster_order = JSON.parse(await rosterFile.async("text"));
+        const incomingDb = await DatabasePackage.read(zip, Papa, (progress, name) => {
+            updateDatabaseLoading(50 + progress * 42, `Reading incoming ${name}...`);
+        });
+        incomingDb.fileName = file.name;
         updateDatabaseLoading(100, "Incoming database ready.");
         return incomingDb;
     } finally {
@@ -1646,12 +1631,16 @@ function applyApprovedMerge() {
             if (proposal.action === "transfer") result.transferred += 1;
             else result.updated += 1;
         }
+        const previousRow = [...row];
         proposal.fieldDiffs.filter(diff => diff.selected).forEach(diff => {
             const targetIndex = ensureMergeTargetColumn(tableName, table, diff);
             while (row.length < table.header.length) row.push("");
             row[targetIndex] = diff.newValue;
         });
-        if (tableName.toLowerCase() === "players") affectedPlayerIndexes.add(rowIndex);
+        if (tableName.toLowerCase() === "players") {
+            updatePlayerRosterReferences(table, previousRow, row);
+            affectedPlayerIndexes.add(rowIndex);
+        }
     });
     const playersTable = getMergeTable(db, "Players");
     if (playersTable) {

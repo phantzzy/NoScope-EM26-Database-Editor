@@ -367,6 +367,17 @@ body.noscope-desktop .desktop-titlebar {
     color: var(--text-muted);
 }
 
+.supported-game-version {
+    margin-top:16px;
+    color:var(--text-secondary);
+    font:500 .72rem var(--font-mono);
+    line-height:1.5;
+}
+.supported-game-version strong {
+    color:var(--text-primary);
+    font-weight:700;
+}
+
 .brand-external-links {
     display:flex;
     align-items:center;
@@ -462,10 +473,6 @@ body.noscope-desktop .desktop-titlebar {
     -webkit-mask-image:url("../assets/vendor/simple-icons/steam.svg");
     mask-image:url("../assets/vendor/simple-icons/steam.svg");
 }
-.brand-external-mark.discord {
-    -webkit-mask-image:url("../assets/vendor/simple-icons/discord.svg");
-    mask-image:url("../assets/vendor/simple-icons/discord.svg");
-}
 .brand-external-mark.github {
     -webkit-mask-image:url("../assets/vendor/simple-icons/github.svg");
     mask-image:url("../assets/vendor/simple-icons/github.svg");
@@ -479,49 +486,28 @@ body.noscope-desktop .desktop-titlebar {
 }
 
 .theme-toggle {
-    --theme-toggle-bg: var(--bg-hover);
-    position:relative;
     justify-content:center;
     width:36px;
     height:31px;
     padding:0;
 }
-.theme-toggle::before {
-    content:"";
-    position:absolute;
-    inset:50% auto auto 50%;
-    width:9px;
-    height:9px;
-    border:3px solid currentColor;
-    border-radius:50%;
-    background:transparent;
-    color:currentColor;
-    transform:translate(-50%,-50%);
+.theme-toggle svg {
+    display:block;
+    width:18px;
+    height:18px;
+    flex:0 0 18px;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:1.7;
+    stroke-linecap:round;
+    stroke-linejoin:round;
 }
-.theme-toggle::after {
-    content:"";
-    position:absolute;
-    top:50%;
-    left:50%;
-    width:3px;
-    height:3px;
-    border-radius:50%;
-    background:currentColor;
-    box-shadow:0 -10px currentColor,0 10px currentColor,10px 0 currentColor,-10px 0 currentColor,7px 7px currentColor,-7px 7px currentColor,7px -7px currentColor,-7px -7px currentColor;
-    transform:translate(-50%,-50%);
+.theme-toggle .theme-icon-moon,
+:root[data-theme="light"] .theme-toggle .theme-icon-sun {
+    display:none;
 }
-:root[data-theme="light"] .theme-toggle::before {
-    width:17px;
-    height:17px;
-    border:0;
-    background:currentColor;
-}
-:root[data-theme="light"] .theme-toggle::after {
-    width:15px;
-    height:15px;
-    background:var(--theme-toggle-bg);
-    box-shadow:none;
-    transform:translate(-18%,-58%);
+:root[data-theme="light"] .theme-toggle .theme-icon-moon {
+    display:block;
 }
 
 .lang-selector {
@@ -4407,13 +4393,11 @@ tr:hover:not(.selected) {
 }
 
 :root[data-theme="light"] .theme-toggle {
-    --theme-toggle-bg:#e8eef5;
     border-color:#cfd7e2;
     background:#e8eef5;
     color:#1b2430;
 }
 :root[data-theme="light"] .theme-toggle:hover {
-    --theme-toggle-bg:#dce4ee;
     background:#dce4ee;
 }
 :root[data-theme="light"] .link-button {

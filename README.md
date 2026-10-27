@@ -2,7 +2,9 @@
 
 NoScope is a community-built, browser-based editor for Esports Manager `.emdb` database files. It provides a visual interface for browsing, searching, comparing, filtering, creating, editing, validating, and merging database records without manually working with the CSV files stored inside an `.emdb` archive.
 
-NoScope currently targets the database structure used by Esports Manager 2026. The current release is `v2.2.0`; full release notes are available in the built-in Changelog panel and under [`changelogs/`](changelogs/).
+NoScope currently targets the database structure used by Esports Manager 2026. The current release is `v3.0.0`; full release notes are available in the built-in Changelog panel and under [`changelogs/`](changelogs/).
+
+The working tree includes compatibility fixes verified against the developer database supplied on 27 October 2026. See the [compatibility report](docs/compatibility-2026-10-27.md) for supported fields, source-data issues, and repeatable regression tests.
 
 > [!IMPORTANT]
 > NoScope is an unofficial community project. It is not affiliated with, endorsed by, or maintained by the developers or publishers of Esports Manager. Always keep a backup of the original database before editing it.
@@ -30,7 +32,7 @@ NoScope currently targets the database structure used by Esports Manager 2026. T
 - Pagination with first, previous, next, last, and validated page-jump controls.
 - Multi-select in card and list views with Deselect all support.
 - Horizontal scrolling for wide list views.
-- Built-in Guide, Library, Assets, Changelog, Steam, and Discord links.
+- Built-in Guide, Library, Assets, Changelog, Steam, and GitHub links.
 
 ### Players
 
@@ -150,10 +152,10 @@ npm start
 
 The Electron version uses native Open and Save dialogs for `.emdb` files. By default, Save opens in your `Documents\NoScope` folder, creating that folder when needed.
 
-To create the custom Windows installer:
+To create the custom Windows installer, install a .NET SDK that supports the `net8.0-windows` target. The first build requires internet access to restore its .NET packages; the repository's `NuGet.Config` supplies the official NuGet feed even if no sources are configured on the PC.
 
 ```powershell
-npm run dist
+npm.cmd run dist
 ```
 
 The fully custom installer is written to `release/NoScope-Installer.exe`. It installs a matching `NoScope-Uninstaller.exe` with the same styled interface and registers it with Windows uninstall settings.
@@ -251,7 +253,7 @@ Remote downloads can fail when an image host blocks cross-origin browser request
 - **Library** provides bundled database downloads and source links.
 - **Assets** links to the shared CustomAssets folder.
 - **Changelog** contains expandable `v2.1.0` and `v2.0.0` release notes.
-- The Steam and Discord buttons open the official Esports Manager 2026 pages.
+- The Steam button opens the official Esports Manager 2026 page; GitHub opens the NoScope source repository.
 - The theme button switches between dark and light mode.
 
 ## Player Rating and Potential
@@ -352,7 +354,7 @@ NoScope uses:
 - [JSZip](https://stuk.github.io/jszip/) for ZIP archive processing.
 - [Papa Parse](https://www.papaparse.com/) for CSV parsing and generation.
 - [flag-icons](https://flagicons.lipis.dev/) for country flags.
-- [Simple Icons](https://simpleicons.org/) for the Steam and Discord marks.
+- [Simple Icons](https://simpleicons.org/) for the Steam and GitHub marks.
 - [OpenStreetMap](https://www.openstreetmap.org/) for tournament location maps.
 - Google Fonts for Manrope and JetBrains Mono.
 
