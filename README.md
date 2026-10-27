@@ -1,6 +1,6 @@
 # NoScope - Esports Manager Database Editor
 
-NoScope is a community-built, browser-based editor for Esports Manager `.emdb` database files. It provides a visual interface for browsing, searching, comparing, filtering, creating, editing, validating, and merging database records without manually working with the CSV files stored inside an `.emdb` archive.
+NoScope is a community-built Windows desktop editor for Esports Manager `.emdb` database files. It provides a visual interface for browsing, searching, comparing, filtering, creating, editing, validating, and merging database records without manually working with the CSV files stored inside an `.emdb` archive.
 
 NoScope currently targets the database structure used by Esports Manager 2026. The current release is `v2.2.0`; full release notes are available in the built-in Changelog panel and under [`changelogs/`](changelogs/).
 
@@ -13,8 +13,8 @@ NoScope currently targets the database structure used by Esports Manager 2026. T
 
 - Open and edit `.emdb` files containing Players, Staff, Teams, Tournaments, and Sponsors.
 - Open unpacked CSV table folders.
-- Load the bundled NoScope default database.
-- Browse and download five bundled community databases from the Library panel.
+- Load the NoScope default database from the public asset service.
+- Browse and download community databases from the Library panel.
 - Save the edited database back to an `.emdb` file.
 - Export all loaded database tables as CSV files in a ZIP archive.
 - View dynamic loading progress while a database is being opened.
@@ -100,7 +100,7 @@ NoScope currently targets the database structure used by Esports Manager 2026. T
 
 ### Assets and appearance
 
-- Bundled player portraits, staff images, team logos, sponsor logos, and tournament images.
+- Shared player portraits, staff images, team logos, sponsor logos, and tournament images from the public asset service.
 - Consistent SVG country flags from `flag-icons`.
 - Nationality selectors covering the 193 UN member states, Kosovo, and additional game-compatible countries and territories.
 - Local browser-specific image overrides stored in IndexedDB.
@@ -111,58 +111,26 @@ NoScope currently targets the database structure used by Esports Manager 2026. T
 
 ## Getting started
 
-### Requirements
+### Install or run the desktop app
 
-No build process is required to run NoScope. You need:
+Download an installer from [GitHub Releases](https://github.com/phantzzy/NoScope-EM26-Database-Editor/releases). The `beta` branch contains ongoing v3.0.0 work; it does not automatically become an installer release.
 
-- A modern desktop browser.
-- An Esports Manager `.emdb` database file, unless using a bundled Library database.
-- An internet connection for the externally hosted fonts and OpenStreetMap tiles.
-
-Chromium-based browsers provide the most complete experience because they support the native Save As API.
-
-### Run with a local web server
-
-Running NoScope through a static server enables bundled database loading and all fetch-based panels.
-
-From the project directory, use any static server. For example:
+To run from source, install Node.js with npm and use:
 
 ```powershell
-python -m http.server 8000
+npm.cmd ci
+npm.cmd start
 ```
 
-Then open:
+The Electron app uses native Open and Save dialogs. By default, Save opens in your `Documents\NoScope` folder. Bring your own `.emdb`, or use the Library while connected to the internet. Databases and the custom image library are hosted separately and are not included in the source checkout.
 
-```text
-http://localhost:8000
-```
-
-Opening `index.html` directly still supports most manual open, edit, and save workflows, but browser security restrictions can block bundled databases, release notes, and other local fetches.
-
-### Run as a desktop app
-
-NoScope can also run through Electron as a Windows desktop app shell.
+For the custom Windows installer, also install a .NET SDK that supports `net8.0-windows`. The initial build needs internet access to restore packages from the official NuGet feed configured in `NuGet.Config`.
 
 ```powershell
-npm install
-npm start
+npm.cmd run dist
 ```
 
-The Electron version uses native Open and Save dialogs for `.emdb` files. By default, Save opens in your `Documents\NoScope` folder, creating that folder when needed.
-
-To create the custom Windows installer:
-
-```powershell
-npm run dist
-```
-
-The fully custom installer is written to `release/NoScope-Installer.exe`. It installs a matching `NoScope-Uninstaller.exe` with the same styled interface and registers it with Windows uninstall settings.
-
-The older NSIS installer can still be built as a fallback:
-
-```powershell
-npm run dist:nsis
-```
+The result is `release/NoScope-Installer.exe`, with a matching uninstaller. See [CONTRIBUTING.md](CONTRIBUTING.md) for branch selection, tests, asset tooling, and what belongs in source control. A hosted webpage edition is not currently maintained; the HTML/CSS/JavaScript files remain essential to the desktop renderer.
 
 ## How to use NoScope
 
@@ -171,11 +139,11 @@ npm run dist:nsis
 Choose one of the following:
 
 - **Open .emdb...** selects a database from your computer.
-- **Load Default DB** loads `data/pzy_s_-_NoScope_MEGA_DB.emdb`.
+- **Load Default DB** loads the default database from the public asset service, with a local `data/` fallback when provided.
 - **Open CSV folder...** loads an unpacked set of supported CSV tables.
-- **Library** shows the bundled NoScope, default EM2026, and community databases.
+- **Library** shows the remotely hosted NoScope, default EM2026, and community databases.
 
-Database processing happens locally in the browser. NoScope does not upload the selected database to a server.
+Database processing happens locally in the app. NoScope does not upload the selected database to a server.
 
 ### 2. Browse and select records
 
@@ -243,14 +211,14 @@ The editor can:
 - Remove a local override.
 - Download a direct image URL with the identifier-based filename expected by the game.
 
-Remote downloads can fail when an image host blocks cross-origin browser requests. Automatic placement in the game's installation directory remains planned for the future desktop application.
+The desktop Assets panel can download the shared image library into the configured game CustomAssets folder. Downloads require internet access.
 
 ### 9. Use the built-in reference panels
 
 - **Guide** provides task-based instructions and screenshots.
-- **Library** provides bundled database downloads and source links.
+- **Library** provides database downloads and source links.
 - **Assets** links to the shared CustomAssets folder.
-- **Changelog** contains expandable `v2.1.0` and `v2.0.0` release notes.
+- **Changelog** contains expandable app release notes.
 - The Steam and Discord buttons open the official Esports Manager 2026 pages.
 - The theme button switches between dark and light mode.
 
@@ -269,42 +237,17 @@ When Potential is blank or `0`, NoScope displays an automatic value. The resolve
 
 ## Project structure
 
-```text
-NoScope/
-|-- index.html                    # Application entry point
-|-- README.md                     # Project documentation
-|-- assets/
-|   |-- badges/                   # FACEIT and other status badges
-|   |-- branding/                 # NoScope branding
-|   |-- countries/                # Legacy game-provided country images
-|   |-- custom/                   # Player, staff, team, sponsor, and tournament assets
-|   |-- guide/                    # Guide screenshots
-|   |-- ui/                       # Shared backgrounds and placeholders
-|   `-- vendor/                   # Vendored third-party visual assets
-|-- changelogs/                   # Current and archived release notes
-|-- css/
-|   `-- styles.css                # Application styling
-|-- data/                         # Bundled EMDB databases
-|-- docs/
-|   `-- announcements/            # Release announcement copy
-|-- js/
-|   |-- app.js                    # Main application and editor logic
-|   |-- features/                 # Merge and validation features
-|   |-- generated/                # Generated bundled-asset index
-|   `-- services/                 # Browser storage services
-`-- tools/
-    `-- build-asset-manifest.ps1  # Asset manifest generator
-```
+| Path | Purpose |
+| --- | --- |
+| `index.html`, `css/`, `js/` | Desktop renderer, editor logic, and generated runtime asset index |
+| `electron/` | Desktop window, native dialogs, downloads, and updater |
+| `installer/`, `tools/` | Installer source and reproducible build tooling |
+| `assets/` | Required UI images, guide screenshots, flags, and vendor license notices |
+| `changelogs/` | App release notes and historical release documentation |
+| `package.json`, `package-lock.json`, `NuGet.Config` | Dependencies and build configuration |
+| `tests/`, `docs/` (beta) | Regression suites and database compatibility findings |
 
-## Updating bundled assets
-
-After adding, renaming, or removing images under `assets/custom/` or `assets/countries/`, regenerate the asset indexes:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-asset-manifest.ps1
-```
-
-The script writes the in-app index to `js/generated/asset-manifest.js` and the Cloudflare install index to `manifest.json`. Commit the regenerated manifests together with the asset changes. If Cloudflare Pages builds from GitHub, use `npm run build` as the Pages build command so asset renames refresh `manifest.json` during deploy.
+`data/`, `assets/custom/`, `tmp/`, and build outputs are local-only and ignored. Keep the checked-in runtime asset index. Regenerating it requires the separately maintained custom asset library; see [the contributor guide](CONTRIBUTING.md#assets-and-repository-contents).
 
 ## Open-source development
 
@@ -320,14 +263,14 @@ NoScope is developed openly so users can inspect how database files are handled,
 
 ### Contributing
 
-1. Fork the repository.
+1. Read [CONTRIBUTING.md](CONTRIBUTING.md), then fork the repository.
 2. Create a branch for the change.
 3. Keep changes focused and preserve existing database values.
 4. Test opening, editing, validating, and saving an `.emdb`.
-5. Regenerate the asset manifest when bundled record or country images change.
+5. Follow the contributor guide when changing asset indexes.
 6. Open a pull request describing the change and how it was tested.
 
-For bugs, include the affected database category, reproduction steps, browser version, and any console error. For database-specific problems, include the source `.emdb` only when you have permission to share it.
+For bugs, include the affected database category, reproduction steps, app version, operating system, and relevant errors. Use synthetic records for database-specific reproductions; do not commit personal databases or unredacted local logs.
 
 ## License status
 
@@ -339,8 +282,7 @@ Bundled game-related databases and image assets may require separate considerati
 
 Planned areas of development include:
 
-- Desktop application packaging.
-- Direct image installation into the game's CustomAssets folders.
+- Desktop packaging and asset installation improvements.
 - Additional database-schema compatibility checks.
 - Automated tests and release builds.
 - Further modularization of the main browser application.

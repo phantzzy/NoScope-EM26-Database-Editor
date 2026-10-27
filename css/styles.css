@@ -1998,36 +1998,6 @@ body.noscope-desktop .desktop-titlebar {
 }
 .changelog-modal .modal-header { min-height:72px; padding:18px 24px; border-bottom:1px solid #2c3037; background:#15171b; }
 .changelog-modal .modal-header h2 { color:var(--accent-hover); font-size:1.15rem; letter-spacing:.11em; }
-.changelog-source-tabs {
-    display:flex;
-    gap:8px;
-    padding:13px 24px;
-    border-bottom:1px solid #2c3037;
-    background:#121419;
-}
-.changelog-source-tab {
-    min-width:94px;
-    height:36px;
-    padding:0 16px;
-    border:1px solid #343a43;
-    border-radius:4px;
-    background:#1b1e24;
-    color:#9fa8b5;
-    font:800 .64rem var(--font-mono);
-    letter-spacing:.08em;
-    text-transform:uppercase;
-    cursor:pointer;
-}
-.changelog-source-tab:hover {
-    border-color:#4a515c;
-    color:#eef1f5;
-}
-.changelog-source-tab.is-active {
-    border-color:rgba(var(--accent-rgb),.76);
-    background:linear-gradient(180deg, rgba(var(--accent-rgb),.28), rgba(var(--accent-rgb),.12));
-    color:#fff;
-    box-shadow:0 0 0 1px rgba(var(--accent-rgb),.12);
-}
 .changelog-modal-content { flex:1; min-height:0; overflow:auto; padding:22px 24px 32px; }
 .changelog-archive-overview {
     display:flex;
@@ -2114,8 +2084,6 @@ body.noscope-desktop .desktop-titlebar {
 @media(max-width:760px){
     .changelog-modal-backdrop{padding:8px}
     .changelog-modal{width:100%;max-height:calc(100vh - 16px)}
-    .changelog-source-tabs{padding:10px 12px;overflow-x:auto}
-    .changelog-source-tab{min-width:86px}
     .changelog-modal-content{padding:16px 12px 24px}
     .changelog-release-summary{min-height:82px;align-items:flex-start;gap:12px;padding:13px}
     .changelog-release-heading{align-items:flex-start;flex-direction:column;gap:8px}
@@ -3923,24 +3891,6 @@ tr:hover:not(.selected) {
 :root[data-theme="light"] .player-editor .modal-header {
     border-bottom-color:#d8dee7;
     background:#f7f9fc;
-}
-:root[data-theme="light"] .changelog-source-tabs {
-    border-bottom-color:#d8dee7;
-    background:#ffffff;
-}
-:root[data-theme="light"] .changelog-source-tab {
-    border-color:#cfd7e2;
-    background:#f2f5f8;
-    color:#536174;
-}
-:root[data-theme="light"] .changelog-source-tab:hover {
-    border-color:#b8c2cf;
-    color:#17202b;
-}
-:root[data-theme="light"] .changelog-source-tab.is-active {
-    border-color:rgba(var(--accent-rgb),.55);
-    background:#fff0f2;
-    color:#ad1f2d;
 }
 :root[data-theme="light"] .filter-modal-actions,
 :root[data-theme="light"] .mass-edit-actions,

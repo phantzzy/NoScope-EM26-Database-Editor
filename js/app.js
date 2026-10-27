@@ -482,7 +482,6 @@ const changelogModal = document.getElementById("changelog-modal");
 const changelogModalContent = document.getElementById("changelog-modal-content");
 const btnCloseChangelog = document.getElementById("btn-close-changelog");
 const btnCloseChangelogFooter = document.getElementById("btn-close-changelog-footer");
-const changelogChannelButtons = Array.from(document.querySelectorAll("[data-changelog-channel]"));
 const changelogReleaseCache = new Map();
 const btnUpdate = document.getElementById("btn-update");
 const updateModal = document.getElementById("update-modal");
@@ -540,23 +539,13 @@ const librarySummaryCache = new Map();
 let activeGuideImageTrigger = null;
 let latestUpdateInfo = null;
 let updateBusy = false;
-let activeChangelogChannel = capabilities.desktop ? "app" : "web";
 
-const CHANGELOG_CHANNELS = {
-    app: {
-        label: "App",
-        index: "changelogs/index.json",
-        loading: "Loading app release archive...",
-        emptyTitle: "No app changelogs yet.",
-        emptyMessage: "App release notes will appear here once they are added."
-    },
-    web: {
-        label: "Webpage",
-        index: "changelogs/web-index.json",
-        loading: "Loading webpage release archive...",
-        emptyTitle: "No webpage changelogs yet.",
-        emptyMessage: "Web-only release notes will appear here when the hosted version gets its own updates."
-    }
+const APP_CHANGELOG = {
+    label: "App",
+    index: "changelogs/index.json",
+    loading: "Loading app release archive...",
+    emptyTitle: "No app changelogs yet.",
+    emptyMessage: "App release notes will appear here once they are added."
 };
 
 function updateUpdateButtonVisibility() {
@@ -1272,23 +1261,7 @@ function createChangelogRelease(release) {
     return details;
 }
 
-function updateChangelogTabs() {
-    changelogChannelButtons.forEach(button => {
-        const selected = button.dataset.changelogChannel === activeChangelogChannel;
-        button.classList.toggle("is-active", selected);
-        button.setAttribute("aria-selected", String(selected));
-    });
-}
-
-function getActiveChangelogConfig() {
-    return CHANGELOG_CHANNELS[activeChangelogChannel] || CHANGELOG_CHANNELS.app;
-}
-
-function getDefaultChangelogChannel() {
-    return capabilities.desktop ? "app" : "web";
-}
-
-function renderChangelogArchive(releases, config = getActiveChangelogConfig()) {
+function renderChangelogArchive(releases, config = APP_CHANGELOG) {
     const fragment = document.createDocumentFragment();
     const overview = document.createElement("div");
     overview.className = "changelog-archive-overview";
@@ -1306,7 +1279,7 @@ function renderChangelogArchive(releases, config = getActiveChangelogConfig()) {
     changelogModalContent.replaceChildren(fragment);
 }
 
-function renderChangelogEmpty(config = getActiveChangelogConfig()) {
+function renderChangelogEmpty(config = APP_CHANGELOG) {
     const empty = document.createElement("div");
     empty.className = "changelog-empty";
     const title = document.createElement("strong");
@@ -1332,8 +1305,7 @@ function renderChangelogError() {
 }
 
 async function renderChangelogPanel() {
-    const config = getActiveChangelogConfig();
-    updateChangelogTabs();
+    const config = APP_CHANGELOG;
     changelogModalContent.setAttribute("aria-busy", "true");
     changelogModalContent.innerHTML = `<div class="changelog-loading">${config.loading}</div>`;
     try {
@@ -1363,7 +1335,6 @@ async function renderChangelogPanel() {
 }
 
 function openChangelogPanel() {
-    activeChangelogChannel = getDefaultChangelogChannel();
     changelogModal.hidden = false;
     btnCloseChangelog.focus();
     renderChangelogPanel();
@@ -1375,14 +1346,6 @@ function closeChangelogPanel() {
 }
 
 btnChangelog.addEventListener("click", openChangelogPanel);
-changelogChannelButtons.forEach(button => {
-    button.addEventListener("click", () => {
-        const nextChannel = button.dataset.changelogChannel;
-        if (!CHANGELOG_CHANNELS[nextChannel] || nextChannel === activeChangelogChannel) return;
-        activeChangelogChannel = nextChannel;
-        renderChangelogPanel();
-    });
-});
 btnCloseChangelog.addEventListener("click", closeChangelogPanel);
 btnCloseChangelogFooter.addEventListener("click", closeChangelogPanel);
 changelogModal.addEventListener("click", event => {
