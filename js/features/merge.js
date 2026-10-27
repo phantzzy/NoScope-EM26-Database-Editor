@@ -1702,15 +1702,58 @@ function getMergePostValidationSummary(previousTables = null) {
     return checks;
 }
 
-function findMergeAdditionCollision(proposal) {
+function addMergeRowToIndex(tableName, table, row, rowIndex, index, keyGetter) {
+    keyGetter(tableName, table, row).forEach(key => {
+        if (!index.has(key)) index.set(key, []);
+        const indexes = index.get(key);
+        if (!indexes.includes(rowIndex)) indexes.push(rowIndex);
+    });
+}
+
+function removeMergeRowFromIndex(tableName, table, row, rowIndex, index, keyGetter) {
+    keyGetter(tableName, table, row).forEach(key => {
+        const indexes = index.get(key);
+        if (!indexes) return;
+        const remaining = indexes.filter(indexedRow => indexedRow !== rowIndex);
+        if (remaining.length) index.set(key, remaining);
+        else index.delete(key);
+    });
+}
+
+function getMergeApplyIndexes(cache, tableName, table) {
+    const cacheKey = String(tableName).toLowerCase();
+    if (!cache.has(cacheKey)) {
+        cache.set(cacheKey, {
+            stable: buildMergeKeyIndex(tableName, table, getMergeStableKeys),
+            fallback: buildMergeKeyIndex(tableName, table, getMergeFallbackKeys)
+        });
+    }
+    return cache.get(cacheKey);
+}
+
+function updateMergeApplyIndexes(cache, tableName, table, previousRow, row, rowIndex) {
+    const indexes = cache.get(String(tableName).toLowerCase());
+    if (!indexes) return;
+    if (previousRow) {
+        removeMergeRowFromIndex(tableName, table, previousRow, rowIndex, indexes.stable, getMergeStableKeys);
+        removeMergeRowFromIndex(tableName, table, previousRow, rowIndex, indexes.fallback, getMergeFallbackKeys);
+    }
+    addMergeRowToIndex(tableName, table, row, rowIndex, indexes.stable, getMergeStableKeys);
+    addMergeRowToIndex(tableName, table, row, rowIndex, indexes.fallback, getMergeFallbackKeys);
+}
+
+function findMergeAdditionCollision(proposal, applyIndexCache = new Map()) {
     const currentTable = getMergeTable(db, proposal.tableName);
     const incomingTable = mergeState.incomingDb.tables[proposal.tableName];
     const incomingRow = incomingTable?.rows?.[proposal.incomingIndex];
     if (!currentTable || !incomingTable || !incomingRow) return { type: "new", candidates: [] };
-    return findMergeMatch(proposal.tableName, currentTable, incomingTable, incomingRow, {
-        stable: buildMergeKeyIndex(proposal.tableName, currentTable, getMergeStableKeys),
-        fallback: buildMergeKeyIndex(proposal.tableName, currentTable, getMergeFallbackKeys)
-    });
+    return findMergeMatch(
+        proposal.tableName,
+        currentTable,
+        incomingTable,
+        incomingRow,
+        getMergeApplyIndexes(applyIndexCache, proposal.tableName, currentTable)
+    );
 }
 
 function createMergeHealthSummary(checks = []) {
@@ -1740,13 +1783,19 @@ function createMergeHealthSummary(checks = []) {
     return section;
 }
 
-function applyApprovedMerge() {
+function yieldMergeWork() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function applyApprovedMerge(options = {}) {
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : () => {};
     const approved = mergeState.proposals.filter(proposal =>
         proposal.action !== "conflict"
         && proposal.selected
         && proposal.fieldDiffs.some(diff => diff.selected)
     );
-    if (!approved.length) return;
+    if (!approved.length) return false;
+    onProgress(4, "Preparing merge undo snapshot...");
     lastMergeUndo = {
         tables: cloneMergeValue(db.tables),
         roster_order: cloneMergeValue(db.roster_order),
@@ -1756,9 +1805,12 @@ function applyApprovedMerge() {
     };
     const result = { total: 0, attempted: approved.length, added: 0, updated: 0, transferred: 0, blocked: 0, warnings: 0 };
     const affectedPlayerIndexes = new Set();
-    approved.forEach(proposal => {
+    const applyIndexCache = new Map();
+    for (let proposalNumber = 0; proposalNumber < approved.length; proposalNumber += 1) {
+        const proposal = approved[proposalNumber];
+        const shouldYield = (proposalNumber + 1) % 200 === 0 || proposalNumber + 1 === approved.length;
         if (proposal.action === "add" && !proposal.explicitAddition) {
-            const collision = findMergeAdditionCollision(proposal);
+            const collision = findMergeAdditionCollision(proposal, applyIndexCache);
             if (collision.type !== "new") {
                 result.blocked += 1;
                 addMergeSafetyEvent(
@@ -1767,7 +1819,12 @@ function applyApprovedMerge() {
                     proposal.label,
                     "Matched an existing record while applying the merge"
                 );
-                return;
+                if (shouldYield) {
+                    const percent = 8 + ((proposalNumber + 1) / approved.length) * 70;
+                    onProgress(percent, `Checking records ${proposalNumber + 1} of ${approved.length}...`);
+                    await yieldMergeWork();
+                }
+                continue;
             }
         }
         const { tableName, table } = ensureMergeTargetTable(proposal);
@@ -1781,7 +1838,7 @@ function applyApprovedMerge() {
         } else {
             rowIndex = proposal.baseIndex;
             row = table.rows[rowIndex];
-            if (!row) return;
+            if (!row) continue;
             if (proposal.action === "transfer") result.transferred += 1;
             else result.updated += 1;
         }
@@ -1795,8 +1852,22 @@ function applyApprovedMerge() {
             updatePlayerRosterReferences(table, previousRow, row);
             affectedPlayerIndexes.add(rowIndex);
         }
+        updateMergeApplyIndexes(
+            applyIndexCache,
+            tableName,
+            table,
+            proposal.action === "add" ? null : previousRow,
+            row,
+            rowIndex
+        );
         result.total += 1;
-    });
+        if (shouldYield) {
+            const percent = 8 + ((proposalNumber + 1) / approved.length) * 70;
+            onProgress(percent, `Applying records ${proposalNumber + 1} of ${approved.length}...`);
+            await yieldMergeWork();
+        }
+    }
+    onProgress(82, "Recalculating affected player ratings...");
     const playersTable = getMergeTable(db, "Players");
     if (playersTable) {
         const ratingIndex = playersTable.header.findIndex(label => ["rating", "overall", "overallrating"].includes(normalizeFieldName(label)));
@@ -1806,11 +1877,15 @@ function applyApprovedMerge() {
             });
         }
     }
+    await yieldMergeWork();
+    onProgress(88, "Running post-merge safety checks...");
     const currentIdentityPairs = getMergeSuspiciousPlayerIdentityPairs();
     const previousIdentityPairs = getMergeSuspiciousPlayerIdentityPairs(lastMergeUndo.tables);
     const newIdentityPairs = [...currentIdentityPairs].filter(pair => !previousIdentityPairs.has(pair)).length;
     result.warnings = result.blocked + newIdentityPairs + countMergeTeamWarnings(affectedPlayerIndexes) + countMergeDuplicateIdWarnings();
     result.healthChecks = getMergePostValidationSummary(lastMergeUndo.tables);
+    await yieldMergeWork();
+    onProgress(95, "Refreshing the editor...");
     invalidatePlayerLeaderboardRanks();
     if (result.total) markUnsavedChanges({ preserveMergeUndo: true });
     btnUndoMerge.hidden = result.total === 0;
@@ -1821,15 +1896,21 @@ function applyApprovedMerge() {
     const blockedMessage = result.blocked ? ` ${result.blocked} suspicious addition${result.blocked === 1 ? " was" : "s were"} blocked.` : "";
     setStatus(`Merged ${result.total} approved record${result.total === 1 ? "" : "s"} into ${db.fileName || "Database A"}.${blockedMessage}`, result.blocked ? "warning" : "success");
     setMergeStep("result");
+    onProgress(100, "Merge complete.");
+    return true;
+}
+
+function restoreMergeSnapshot(snapshot) {
+    db.tables = cloneMergeValue(snapshot.tables);
+    db.roster_order = cloneMergeValue(snapshot.roster_order);
+    db.fileName = snapshot.fileName;
+    hasUnsavedChanges = snapshot.hasUnsavedChanges;
 }
 
 function undoLastMerge() {
     if (!lastMergeUndo) return;
     const snapshot = lastMergeUndo;
-    db.tables = cloneMergeValue(snapshot.tables);
-    db.roster_order = cloneMergeValue(snapshot.roster_order);
-    db.fileName = snapshot.fileName;
-    hasUnsavedChanges = snapshot.hasUnsavedChanges;
+    restoreMergeSnapshot(snapshot);
     clearMergeUndo();
     buildUI();
     if (snapshot.activeTab && db.tables[snapshot.activeTab]) switchTab(snapshot.activeTab);
@@ -1856,7 +1937,27 @@ async function handleMergeNext() {
         return;
     }
     if (mergeState.step === "review") {
-        applyApprovedMerge();
+        const approvedCount = getSelectedMergeProposalCount();
+        showDatabaseLoading(`Applying ${approvedCount} approved record${approvedCount === 1 ? "" : "s"}...`);
+        updateDatabaseLoading(0, "Preparing merge...");
+        btnMergeNext.disabled = true;
+        await waitForLoadingPaint();
+        try {
+            await applyApprovedMerge({ onProgress: updateDatabaseLoading });
+        } catch (error) {
+            console.error(error);
+            if (lastMergeUndo) {
+                const snapshot = lastMergeUndo;
+                restoreMergeSnapshot(snapshot);
+                clearMergeUndo();
+                buildUI();
+                if (snapshot.activeTab && db.tables[snapshot.activeTab]) switchTab(snapshot.activeTab);
+            }
+            setStatus("Merge could not be completed.", "error");
+            setMergeFeedback(error.message || "Merge could not be completed.");
+        } finally {
+            hideDatabaseLoading();
+        }
         return;
     }
     closeMergeModal();

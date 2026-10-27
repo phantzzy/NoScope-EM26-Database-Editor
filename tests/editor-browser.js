@@ -180,7 +180,9 @@
     equal(getFilteredMergeProposals(), [], 'Safe-change filter included an ID mismatch');
     mergeState.reviewFilter.attention = 'all';
     identityMismatch.selected = true;
-    applyApprovedMerge();
+    const mergeProgress = [];
+    await applyApprovedMerge({ onProgress: (percent, message) => mergeProgress.push({ percent, message }) });
+    assert(mergeProgress.at(-1)?.percent === 100 && mergeProgress.some(item => /Applying records/.test(item.message)), 'Merge progress did not report apply work and completion');
     assert(db.tables.Players.rows.length === 7, 'Identity match created a duplicate player');
     assert(db.tables.Players.rows[1][13] === 'p1' && db.tables.Players.rows[1][6] === '18', 'Identity match did not preserve the base ID while applying approved fields');
     undoLastMerge();
@@ -207,22 +209,44 @@
     mergeState.incomingDb = { tables: { Players: { header: [...db.tables.Players.header], rows: [guardedOne, guardedTwo] } } };
     buildMergeProposals();
     assert(mergeState.proposals.filter(proposal => proposal.action === 'add').length === 2, 'Addition guard fixture was not offered for review');
-    applyApprovedMerge();
+    await applyApprovedMerge();
     assert(mergeState.result.added === 1 && mergeState.result.blocked === 1, 'Apply-time duplicate guard did not block the second alias');
     assert(db.tables.Players.rows.filter(row => row[0] === 'DuplicateGuard').length === 1, 'Apply-time guard left duplicate players');
     undoLastMerge();
     assert(getDatabaseStateSnapshot() === beforeMerge, 'Duplicate-guard undo failed');
+
+    // Large additions must reuse lookup indexes and yield often enough to report progress.
+    const bulkRows = Array.from({ length: 5000 }, (_, index) => {
+        const row = [...db.tables.Players.rows[1]];
+        row[0] = `BulkPlayer${index}`;
+        row[1] = 'Bulk';
+        row[2] = `Player${index}`;
+        row[13] = `bulk-player-${index}`;
+        return row;
+    });
+    mergeState = createEmptyMergeState();
+    mergeState.incomingDb = { tables: { Players: { header: [...db.tables.Players.header], rows: bulkRows } } };
+    buildMergeProposals();
+    assert(mergeState.proposals.length === bulkRows.length && mergeState.proposals.every(proposal => proposal.action === 'add'), 'Large-merge fixture was not offered as additions');
+    const bulkProgress = [];
+    const bulkStarted = performance.now();
+    await applyApprovedMerge({ onProgress: (percent, message) => bulkProgress.push({ percent, message }) });
+    report.largeMerge = { records: bulkRows.length, applyMilliseconds: Math.round(performance.now() - bulkStarted) };
+    assert(mergeState.result.added === bulkRows.length && mergeState.result.blocked === 0, 'Large merge did not apply every unique player');
+    assert(bulkProgress.filter(item => /Applying records/.test(item.message)).length >= 20, 'Large merge did not yield periodic progress updates');
+    undoLastMerge();
+    assert(getDatabaseStateSnapshot() === beforeMerge, 'Large-merge undo failed');
 
     mergeState = createEmptyMergeState();
     mergeState.incomingDb = { tables: JSON.parse(JSON.stringify(db.tables)) };
     mergeState.incomingDb.tables.Players.rows[1][5] = 'Beta';
     buildMergeProposals();
     assert(mergeState.proposals.some(proposal => proposal.action === 'transfer'), 'Merge transfer review missing');
-    applyApprovedMerge();
+    await applyApprovedMerge();
     assert(db.tables.Players.rows[1][5] === 'Beta' && !db.roster_order.Alpha.includes('p1'), 'Approved merge leaves stale roster references');
     undoLastMerge();
     assert(getDatabaseStateSnapshot() === beforeMerge, 'Merge undo failed to restore tables and roster');
-    check('Comparison, selected-player mass editing, suspicious identity review, duplicate-addition guard, merge transfer and merge undo retain their behavior');
+    check('Comparison, mass editing, suspicious identity review, a 5,000-player incremental merge, transfers and merge undo retain their behavior');
 
     let savedBlob;
     const originalSave = saveEmdbBlob;
