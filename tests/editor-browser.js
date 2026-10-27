@@ -167,7 +167,9 @@
     mergeState.incomingDb = { tables: { Players: JSON.parse(JSON.stringify(db.tables.Players)) } };
     mergeState.incomingDb.tables.Players.rows[1][13] = 'alternate-p1';
     mergeState.incomingDb.tables.Players.rows[1][6] = '18';
-    buildMergeProposals();
+    mergeState.step = 'scope';
+    await handleMergeNext();
+    assert(mergeState.step === 'review' && databaseLoadingScreen.hidden, 'Build-review loading screen did not complete cleanly');
     const identityMismatch = mergeState.proposals.find(proposal => proposal.incomingIndex === 1);
     assert(identityMismatch?.action === 'update', 'Different player ID was proposed as a duplicate addition');
     assert(identityMismatch.identityWarning && !identityMismatch.selected, 'Suspicious identity match was not held for manual approval');

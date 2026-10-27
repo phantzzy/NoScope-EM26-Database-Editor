@@ -1926,12 +1926,27 @@ async function handleMergeNext() {
         return;
     }
     if (mergeState.step === "scope") {
+        showDatabaseLoading("Building merge review...");
+        updateDatabaseLoading(8, "Indexing Database A...");
         btnMergeNext.disabled = true;
-        btnMergeNext.textContent = "Building review...";
         await waitForLoadingPaint();
-        buildMergeProposals();
-        setMergeStep("review");
-        if (!mergeState.proposals.length) setMergeFeedback("No mergeable differences were found for the selected scope.");
+        try {
+            updateDatabaseLoading(42, "Comparing incoming records...");
+            await waitForLoadingPaint();
+            buildMergeProposals();
+            updateDatabaseLoading(92, "Preparing review items...");
+            setMergeStep("review");
+            if (!mergeState.proposals.length) setMergeFeedback("No mergeable differences were found for the selected scope.");
+            updateDatabaseLoading(100, "Merge review ready.");
+            await waitForLoadingPaint();
+        } catch (error) {
+            console.error(error);
+            setStatus("Merge review could not be built.", "error");
+            setMergeFeedback(error.message || "Merge review could not be built.");
+        } finally {
+            hideDatabaseLoading();
+            if (mergeState.step === "scope") updateMergeFooter();
+        }
         return;
     }
     if (mergeState.step === "review") {
