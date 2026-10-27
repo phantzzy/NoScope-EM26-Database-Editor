@@ -1704,9 +1704,8 @@ function getMergePostValidationSummary(previousTables = null) {
 
 function addMergeRowToIndex(tableName, table, row, rowIndex, index, keyGetter) {
     keyGetter(tableName, table, row).forEach(key => {
-        if (!index.has(key)) index.set(key, []);
-        const indexes = index.get(key);
-        if (!indexes.includes(rowIndex)) indexes.push(rowIndex);
+        if (!index.has(key)) index.set(key, new Set());
+        index.get(key).add(rowIndex);
     });
 }
 
@@ -1714,9 +1713,8 @@ function removeMergeRowFromIndex(tableName, table, row, rowIndex, index, keyGett
     keyGetter(tableName, table, row).forEach(key => {
         const indexes = index.get(key);
         if (!indexes) return;
-        const remaining = indexes.filter(indexedRow => indexedRow !== rowIndex);
-        if (remaining.length) index.set(key, remaining);
-        else index.delete(key);
+        indexes.delete(rowIndex);
+        if (!indexes.size) index.delete(key);
     });
 }
 

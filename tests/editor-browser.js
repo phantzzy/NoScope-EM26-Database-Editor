@@ -205,12 +205,13 @@
     const guardedOne = [...db.tables.Players.rows[1]];
     guardedOne[0] = 'DuplicateGuard'; guardedOne[1] = 'Test'; guardedOne[2] = 'Guard'; guardedOne[3] = '03.03.2003'; guardedOne[13] = 'guard-a';
     const guardedTwo = [...guardedOne]; guardedTwo[13] = 'guard-b'; guardedTwo[6] = '17';
+    const guardedUpdate = [...db.tables.Players.rows[2]]; guardedUpdate[6] = '19';
     mergeState = createEmptyMergeState();
-    mergeState.incomingDb = { tables: { Players: { header: [...db.tables.Players.header], rows: [guardedOne, guardedTwo] } } };
+    mergeState.incomingDb = { tables: { Players: { header: [...db.tables.Players.header], rows: [guardedOne, guardedTwo, guardedUpdate] } } };
     buildMergeProposals();
     assert(mergeState.proposals.filter(proposal => proposal.action === 'add').length === 2, 'Addition guard fixture was not offered for review');
     await applyApprovedMerge();
-    assert(mergeState.result.added === 1 && mergeState.result.blocked === 1, 'Apply-time duplicate guard did not block the second alias');
+    assert(mergeState.result.added === 1 && mergeState.result.blocked === 1 && mergeState.result.updated === 1, 'Cached merge indexes did not support additions followed by updates');
     assert(db.tables.Players.rows.filter(row => row[0] === 'DuplicateGuard').length === 1, 'Apply-time guard left duplicate players');
     undoLastMerge();
     assert(getDatabaseStateSnapshot() === beforeMerge, 'Duplicate-guard undo failed');
