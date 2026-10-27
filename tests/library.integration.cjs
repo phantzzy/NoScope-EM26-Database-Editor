@@ -25,10 +25,10 @@ app.whenReady().then(async () => {
             window.alert = message => { throw new Error(message); };
             const entries = getLibraryDatabaseEntries();
             assert(entries.length === 5, 'Expected exactly five supplied snapshots');
-            assert(getDefaultLibraryDatabaseEntry().fileName === 'default.emdb', 'Wrong default database');
+            assert(!document.getElementById('btn-load-default'), 'Removed toolbar button remains');
+            assert(entries[0].fileName === 'default.emdb', 'Developers database missing from Library');
             applyRemoteAssetManifest({ Players: {}, Databases: [{ fileName: 'old-default.emdb', default: true, url: 'https://example.invalid/old.emdb' }] });
             equal(getLibraryDatabaseEntries(), entries, 'Cloud manifest changed the bundled Library');
-            assert(getDefaultLibraryDatabaseEntry().fileName === 'default.emdb', 'Cloud manifest changed the default');
             const report = [];
             for (const entry of entries) {
                 const blob = await fetchBundledDatabaseBlob(entry);
@@ -46,8 +46,6 @@ app.whenReady().then(async () => {
                 equal(summary.counts, Object.fromEntries(Object.entries(db.tables).map(([name, table]) => [name, table.rows.length])), 'Library counts mismatch');
                 report.push({ file: entry.fileName, counts: summary.counts, roundTrip: 'passed', validatorFindings: validateCurrentDatabase().issues.length });
             }
-            assert(await loadDefaultDatabase(), 'Default button failed');
-            assert(db.fileName === 'default.emdb', 'Default button loaded another file');
             await openLibraryPanel();
             const cards = [...document.querySelectorAll('.library-db-card')];
             assert(cards.length === 5, 'Library cards missing');

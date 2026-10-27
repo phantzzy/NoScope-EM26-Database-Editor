@@ -4,7 +4,6 @@ const TABLE_FILES = ["Players.csv", "Sponsors.csv", "Staff.csv", "Teams.csv", "T
 const ROSTER_FILE = "roster_order.json";
 const PAGE_SIZE = 25;
 const LIBRARY_DATABASES = window.NOSCOPE_LIBRARY_DATABASES;
-const DEFAULT_LIBRARY_DATABASE = LIBRARY_DATABASES.find(entry => entry.default);
 const CONTENT_CREATOR_META_STORAGE_KEY = "noscopeContentCreators:v1";
 const CONTENT_CREATOR_FILTER_KEY = "__noscopeContentCreator";
 const REMOTE_ASSET_MANIFEST_URL = "https://noscope-assets.pages.dev/manifest.json";
@@ -356,7 +355,6 @@ const btnWindowMinimize = document.getElementById("btn-window-minimize");
 const btnWindowMaximize = document.getElementById("btn-window-maximize");
 const btnWindowClose = document.getElementById("btn-window-close");
 const btnOpen = document.getElementById("btn-open");
-const btnLoadDefault = document.getElementById("btn-load-default");
 const btnOpenFolder = document.getElementById("btn-open-folder");
 const fileInput = document.getElementById("file-input");
 const folderInput = document.getElementById("folder-input");
@@ -791,10 +789,6 @@ async function readResponseAsBlobWithProgress(response, onProgress) {
 
 function getLibraryDatabaseEntries() {
     return [...LIBRARY_DATABASES];
-}
-
-function getDefaultLibraryDatabaseEntry() {
-    return DEFAULT_LIBRARY_DATABASE;
 }
 
 function getLibraryDatabasePath(entry) {
@@ -1735,16 +1729,15 @@ async function loadEMDBFile(file, options = {}) {
     
 }
 
-async function fetchBundledDatabaseBlob(entry = DEFAULT_LIBRARY_DATABASE, onProgress) {
+async function fetchBundledDatabaseBlob(entry, onProgress) {
     const path = getLibraryDatabasePath(entry);
     const response = await fetch(path, { cache: "no-store" });
     if (!response.ok) throw new Error(`${entry.name} request failed (${response.status})`);
     return readResponseAsBlobWithProgress(response, onProgress);
 }
 
-async function loadBundledDatabase(entry = DEFAULT_LIBRARY_DATABASE, triggerButton = btnLoadDefault) {
+async function loadBundledDatabase(entry, triggerButton = null) {
     if (triggerButton) triggerButton.disabled = true;
-    if (triggerButton !== btnLoadDefault) btnLoadDefault.disabled = true;
     showDatabaseLoading(`Loading ${entry.name}...`);
     await waitForLoadingPaint();
     try {
@@ -1764,12 +1757,7 @@ async function loadBundledDatabase(entry = DEFAULT_LIBRARY_DATABASE, triggerButt
     } finally {
         hideDatabaseLoading();
         if (triggerButton) triggerButton.disabled = false;
-        btnLoadDefault.disabled = false;
     }
-}
-
-async function loadDefaultDatabase(triggerButton = btnLoadDefault) {
-    return loadBundledDatabase(getDefaultLibraryDatabaseEntry(), triggerButton);
 }
 
 fileInput.addEventListener("change", async (e) => {
@@ -1777,10 +1765,6 @@ fileInput.addEventListener("change", async (e) => {
     if (!file) return;
     await loadEMDBFile(file);
     fileInput.value = "";
-});
-
-btnLoadDefault.addEventListener("click", async () => {
-    requestUnsavedChangesAction(() => loadDefaultDatabase(btnLoadDefault));
 });
 
 // Open CSV Folder (Fallback using input type file)

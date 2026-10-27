@@ -46,7 +46,7 @@ npm.cmd run dist
 
 The build restores packages from the official NuGet feed and creates `release/NoScope-Installer.exe`. Build scripts and installer source belong in Git; generated binaries, package caches, signing credentials, and payload archives do not. Distribute binaries through GitHub release assets when publishing a release.
 
-With the snapshots present, run `npm.cmd run check:library` to verify their bytes and `npm.cmd run test:library` to check all five databases offline, including load/save/reopen, Library counts, downloads, and the default selection. To test packaged files, use `npm.cmd run test:library -- release/win-unpacked/resources/app`.
+With the snapshots present, run `npm.cmd run check:library` to verify their bytes and `npm.cmd run test:library` to check all five databases offline, including load/save/reopen, Library counts, and downloads. To test packaged files, use `npm.cmd run test:library -- release/win-unpacked/resources/app`.
 
 ## Assets and repository contents
 

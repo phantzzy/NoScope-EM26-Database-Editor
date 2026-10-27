@@ -17,7 +17,7 @@ The working tree includes compatibility fixes verified against the developer dat
 
 - Open and edit `.emdb` files containing Players, Staff, Teams, Tournaments, and Sponsors.
 - Open unpacked CSV table folders.
-- Load the developers' bundled `default.emdb` with **Load Default DB**.
+- Open the developers' bundled `default.emdb` from the **Library**.
 - Open or download the five bundled databases from the Library panel, including offline.
 - Save the edited database back to an `.emdb` file.
 - Export all loaded database tables as CSV files in a ZIP archive.
@@ -143,7 +143,6 @@ The result is `release/NoScope-Installer.exe`, with a matching uninstaller. See 
 Choose one of the following:
 
 - **Open .emdb...** selects a database from your computer.
-- **Load Default DB** loads the developers' bundled `default.emdb`.
 - **Open CSV folder...** loads an unpacked set of supported CSV tables.
 - **Library** contains the developers' default, iamgri mod, luccaneta's GLOBAL UPDATED, World Updated, and Updated Stats: T1-2 & Tier 3 Pros (Mid-Season 2026, before PGL).
 
