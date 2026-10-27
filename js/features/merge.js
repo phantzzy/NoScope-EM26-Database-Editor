@@ -92,7 +92,7 @@ function createEmptyMergeState() {
         proposals: [],
         safetyEvents: [],
         unchangedCount: 0,
-        reviewFilter: { table: "all", action: "all", identity: "all", search: "" },
+        reviewFilter: { table: "all", action: "all", attention: "all", search: "" },
         reviewPage: 1,
         result: null
     };
@@ -971,13 +971,25 @@ function getMergeProposalCounts() {
     return counts;
 }
 
+function isMergeProposalSafe(proposal) {
+    return proposal.action !== "conflict" && !proposal.identityChanged && !proposal.identityWarning;
+}
+
+function matchesMergeAttentionFilter(proposal, attention = "all") {
+    if (attention === "manual-review") return !isMergeProposalSafe(proposal);
+    if (attention === "id-mismatch") return Boolean(proposal.identityWarning);
+    if (attention === "identity-change") return Boolean(proposal.identityChanged);
+    if (attention === "safe") return isMergeProposalSafe(proposal);
+    return true;
+}
+
 function getFilteredMergeProposals() {
-    const { table, action, identity = "all", search } = mergeState.reviewFilter;
+    const { table, action, attention = "all", search } = mergeState.reviewFilter;
     const query = search.trim().toLowerCase();
     return mergeState.proposals.filter(proposal => {
         if (table !== "all" && proposal.tableName !== table) return false;
         if (action !== "all" && proposal.action !== action) return false;
-        if (identity === "id-mismatch" && !proposal.identityWarning) return false;
+        if (!matchesMergeAttentionFilter(proposal, attention)) return false;
         const searchable = [
             proposal.label,
             proposal.baseLabel,
@@ -1088,18 +1100,27 @@ function createMergeReviewToolbar() {
         mergeState.reviewPage = 1;
         renderMergeModal();
     });
-    const identitySelect = document.createElement("select");
-    identitySelect.setAttribute("aria-label", "Filter by identity warning");
+    const attentionSelect = document.createElement("select");
+    attentionSelect.setAttribute("aria-label", "Filter by review status");
     const mismatchCount = mergeState.proposals.filter(proposal => proposal.identityWarning).length;
-    [["all", "All review items"], ["id-mismatch", `ID mismatches (${mismatchCount})`]].forEach(([value, label]) => {
+    const identityChangeCount = mergeState.proposals.filter(proposal => proposal.identityChanged).length;
+    const manualReviewCount = mergeState.proposals.filter(proposal => !isMergeProposalSafe(proposal)).length;
+    const safeCount = mergeState.proposals.length - manualReviewCount;
+    [
+        ["all", `All review items (${mergeState.proposals.length})`],
+        ["manual-review", `Needs manual review (${manualReviewCount})`],
+        ["id-mismatch", `ID mismatches (${mismatchCount})`],
+        ["identity-change", `Identity changes (${identityChangeCount})`],
+        ["safe", `Safe changes (${safeCount})`]
+    ].forEach(([value, label]) => {
         const option = document.createElement("option");
         option.value = value;
         option.textContent = label;
-        identitySelect.appendChild(option);
+        attentionSelect.appendChild(option);
     });
-    identitySelect.value = mergeState.reviewFilter.identity || "all";
-    identitySelect.addEventListener("change", () => {
-        mergeState.reviewFilter.identity = identitySelect.value;
+    attentionSelect.value = mergeState.reviewFilter.attention || "all";
+    attentionSelect.addEventListener("change", () => {
+        mergeState.reviewFilter.attention = attentionSelect.value;
         mergeState.reviewPage = 1;
         renderMergeModal();
     });
@@ -1117,7 +1138,7 @@ function createMergeReviewToolbar() {
     clean.textContent = "Approve safe";
     clean.addEventListener("click", () => {
         getFilteredMergeProposals().forEach(proposal => {
-            if (proposal.action !== "conflict" && !proposal.identityChanged && !proposal.identityWarning) proposal.selected = true;
+            if (isMergeProposalSafe(proposal)) proposal.selected = true;
         });
         renderMergeModal();
     });
@@ -1128,7 +1149,7 @@ function createMergeReviewToolbar() {
         getFilteredMergeProposals().forEach(proposal => { proposal.selected = false; });
         renderMergeModal();
     });
-    toolbar.append(tableSelect, actionSelect, identitySelect, search, clean, none);
+    toolbar.append(tableSelect, actionSelect, attentionSelect, search, clean, none);
     return toolbar;
 }
 

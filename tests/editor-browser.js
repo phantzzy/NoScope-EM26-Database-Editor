@@ -62,7 +62,7 @@
             equal(mergeState.proposals.length, reportedDuplicateIds.size, 'Reported MOUZ duplicates did not all reach merge review');
             assert(mergeState.proposals.every(proposal => proposal.action !== 'add'), 'Reported MOUZ duplicate was offered as an automatic addition');
             assert(mergeState.proposals.every(proposal => proposal.identityWarning && !proposal.selected), 'Reported MOUZ ID mismatch was not held for manual review');
-            mergeState.reviewFilter.identity = 'id-mismatch';
+            mergeState.reviewFilter.attention = 'id-mismatch';
             equal(getFilteredMergeProposals().length, reportedDuplicateIds.size, 'ID mismatch filter did not isolate all four reported MOUZ players');
             sourcePlayers.rows = originalRows;
             mergeState = createEmptyMergeState();
@@ -172,9 +172,13 @@
     assert(identityMismatch?.action === 'update', 'Different player ID was proposed as a duplicate addition');
     assert(identityMismatch.identityWarning && !identityMismatch.selected, 'Suspicious identity match was not held for manual approval');
     assert(identityMismatch.confidence === 'identity', 'Strong identity fallback was not reported');
-    mergeState.reviewFilter.identity = 'id-mismatch';
+    mergeState.reviewFilter.attention = 'id-mismatch';
     equal(getFilteredMergeProposals(), [identityMismatch], 'ID mismatch filter did not isolate suspicious identity matches');
-    mergeState.reviewFilter.identity = 'all';
+    mergeState.reviewFilter.attention = 'manual-review';
+    equal(getFilteredMergeProposals(), [identityMismatch], 'Manual-review filter omitted an ID mismatch');
+    mergeState.reviewFilter.attention = 'safe';
+    equal(getFilteredMergeProposals(), [], 'Safe-change filter included an ID mismatch');
+    mergeState.reviewFilter.attention = 'all';
     identityMismatch.selected = true;
     applyApprovedMerge();
     assert(db.tables.Players.rows.length === 7, 'Identity match created a duplicate player');
@@ -192,6 +196,8 @@
     buildMergeProposals();
     const nicknameConflict = mergeState.proposals.find(proposal => proposal.incomingIndex === 1);
     assert(nicknameConflict?.action === 'conflict' && !nicknameConflict.selected, 'Nickname collision was automatically added');
+    mergeState.reviewFilter.attention = 'manual-review';
+    assert(getFilteredMergeProposals().includes(nicknameConflict), 'Manual-review filter omitted a conflict');
 
     // Recheck automatic additions while applying so two incoming aliases cannot create a pair.
     const guardedOne = [...db.tables.Players.rows[1]];
