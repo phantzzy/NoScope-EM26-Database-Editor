@@ -548,7 +548,7 @@ const librarySummaryCache = new Map();
 let activeGuideImageTrigger = null;
 let latestUpdateInfo = null;
 let updateBusy = false;
-let activeChangelogChannel = capabilities.desktop ? "app" : "web";
+let activeChangelogChannel = "app";
 
 const CHANGELOG_CHANNELS = {
     app: {
@@ -1293,7 +1293,7 @@ function getActiveChangelogConfig() {
 }
 
 function getDefaultChangelogChannel() {
-    return capabilities.desktop ? "app" : "web";
+    return "app";
 }
 
 function renderChangelogArchive(releases, config = getActiveChangelogConfig()) {

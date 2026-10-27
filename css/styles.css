@@ -2004,6 +2004,9 @@ body.noscope-desktop .desktop-titlebar {
     text-transform:uppercase;
     cursor:pointer;
 }
+.changelog-source-tabs[hidden] {
+    display:none;
+}
 .changelog-source-tab:hover {
     border-color:#4a515c;
     color:#eef1f5;
