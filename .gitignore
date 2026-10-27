@@ -13,7 +13,11 @@ tmp/
 
 # Local agent files and working notes
 .agents/
+.codex/
+.claude/
 TODO.md
+AGENTS.local.md
+CLAUDE.local.md
 
 # Future JavaScript/app dependencies and builds
 node_modules/
@@ -22,6 +26,23 @@ build/
 release/
 installer/**/bin/
 installer/**/obj/
+coverage/
+test-results/
+
+# Local databases, downloaded asset libraries, and generated hosting index
+*.emdb
+data/
+assets/custom/
+/manifest.json
+
+# Packaged binaries and archives belong in release assets, not source commits
+*.exe
+*.msi
+*.dll
+*.pdb
+*.zip
+*.7z
+*.bak
 
 # Local environment and signing material
 .env
@@ -30,3 +51,9 @@ installer/**/obj/
 *.pem
 *.pfx
 *.key
+*.p12
+*.keystore
+.npmrc
+.aws/
+.azure/
+.ssh/
