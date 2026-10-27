@@ -1215,6 +1215,7 @@ body.noscope-desktop .desktop-titlebar {
 .merge-proposal-update { border-left-color:#89929d; }
 .merge-proposal-transfer { border-left-color:#4ca2d0; }
 .merge-proposal-conflict { border-left-color:#d5a747; }
+.merge-proposal-suspicious { border-color:#8d692f; border-left-color:#f0bd62; box-shadow:inset 0 0 0 1px rgba(240,189,98,.08); }
 .merge-proposal.selected { background:#1c2025; }
 .merge-proposal-header { display:grid; grid-template-columns:18px auto minmax(0,1fr); align-items:center; gap:10px; min-height:54px; padding:9px 13px; }
 .merge-proposal-header > input { width:16px; height:16px; accent-color:var(--accent); }
@@ -1233,7 +1234,9 @@ body.noscope-desktop .desktop-titlebar {
 .merge-identity-name-incoming strong { color:#fff; }
 .merge-identity-arrow { flex:none; color:var(--accent-hover); font:.7rem var(--font-mono); }
 .merge-identity-change-badge { flex:none; padding:3px 6px; border:1px solid rgba(var(--accent-rgb),.48); border-radius:2px; background:rgba(var(--accent-rgb),.1); color:var(--accent-hover); font:700 .48rem var(--font-mono); font-style:normal; letter-spacing:.06em; text-transform:uppercase; }
+.merge-identity-warning-badge { flex:none; padding:3px 6px; border:1px solid #8d692f; border-radius:2px; background:rgba(240,189,98,.1); color:#f0bd62; font:700 .48rem var(--font-mono); font-style:normal; letter-spacing:.06em; text-transform:uppercase; }
 .merge-identity-change-summary { overflow:hidden; color:#d89299; font:.56rem var(--font-mono); text-overflow:ellipsis; white-space:nowrap; }
+.merge-identity-warning-summary { overflow:hidden; color:#d8b66f; font:.56rem var(--font-mono); text-overflow:ellipsis; white-space:nowrap; }
 .merge-proposal details { border-top:1px solid #292e35; }
 .merge-proposal summary { padding:9px 14px; color:#858f9b; font:.63rem var(--font-sans); cursor:pointer; }
 .merge-proposal summary:hover { color:#d8dce1; }
@@ -4006,6 +4009,14 @@ tr:hover:not(.selected) {
 }
 :root[data-theme="light"] .merge-identity-change-summary {
     color:#a72e3b;
+}
+:root[data-theme="light"] .merge-identity-warning-summary {
+    color:#8b641d;
+}
+:root[data-theme="light"] .merge-identity-warning-badge {
+    border-color:#b58a3a;
+    background:#fff8e8;
+    color:#765317;
 }
 :root[data-theme="light"] .merge-field-diff-identity {
     background:rgba(var(--accent-rgb),.045);

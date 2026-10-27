@@ -85,9 +85,14 @@ The working tree includes compatibility fixes verified against the developer dat
 - Update supported player statuses in bulk.
 - Validate ranges and recalculate Rating when changes are applied.
 
-### Database Merge (Disabled)
+### Database Merge (Beta)
 
-- Merge Beta is temporarily disabled while database safety fixes are tested.
+- Compare another `.emdb` with the open database before applying selected additions and updates.
+- Match players by stable IDs first, then by strong identity details when IDs differ.
+- Review ID mismatches manually; suspicious matches are highlighted and left unselected by default.
+- Treat nickname-only matches as conflicts instead of silently adding or replacing a player.
+- Recheck additions while applying a merge to block duplicate aliases created within the same operation.
+- Review post-merge health checks and undo the last merge when the result is not expected.
 - Keep source `.emdb` packages backed up and save edited databases under a new filename.
 
 ### Validation and saving

@@ -42,6 +42,30 @@
             closeEditor();
         }
         check('Developer database opens, all five editors render, and encrypted round-trip preserves all expected cells and roster metadata');
+
+        const sourcePlayers = db.tables.Players;
+        const reportedDuplicateIds = new Set(['torzii', 'spixen', 'xerotn', 'xillex']);
+        const reportedDuplicateRows = sourcePlayers.rows.filter(row => reportedDuplicateIds.has(getMergeInternalId(sourcePlayers, row).toLowerCase()));
+        if (reportedDuplicateRows.length === reportedDuplicateIds.size) {
+            const originalRows = sourcePlayers.rows;
+            sourcePlayers.rows = originalRows.filter(row => !reportedDuplicateIds.has(getMergeInternalId(sourcePlayers, row).toLowerCase()));
+            mergeState = createEmptyMergeState();
+            mergeState.incomingDb = {
+                tables: {
+                    Players: {
+                        header: [...sourcePlayers.header],
+                        rows: reportedDuplicateRows.map(row => [...row])
+                    }
+                }
+            };
+            buildMergeProposals();
+            equal(mergeState.proposals.length, reportedDuplicateIds.size, 'Reported MOUZ duplicates did not all reach merge review');
+            assert(mergeState.proposals.every(proposal => proposal.action !== 'add'), 'Reported MOUZ duplicate was offered as an automatic addition');
+            assert(mergeState.proposals.every(proposal => proposal.identityWarning && !proposal.selected), 'Reported MOUZ ID mismatch was not held for manual review');
+            sourcePlayers.rows = originalRows;
+            mergeState = createEmptyMergeState();
+            check('The four reported MOUZ duplicate identities are matched, highlighted and left unselected instead of being added again');
+        }
     }
 
     const zip = new JSZip();
@@ -135,6 +159,49 @@
     assert(db.tables.Players.rows[3][7] === '18', 'Mass edit changed an unselected player');
     clearSelection();
     const beforeMerge = getDatabaseStateSnapshot();
+
+    // A different internal ID must not make an otherwise identical player an automatic addition.
+    mergeState = createEmptyMergeState();
+    mergeState.incomingDb = { tables: { Players: JSON.parse(JSON.stringify(db.tables.Players)) } };
+    mergeState.incomingDb.tables.Players.rows[1][13] = 'alternate-p1';
+    mergeState.incomingDb.tables.Players.rows[1][6] = '18';
+    buildMergeProposals();
+    const identityMismatch = mergeState.proposals.find(proposal => proposal.incomingIndex === 1);
+    assert(identityMismatch?.action === 'update', 'Different player ID was proposed as a duplicate addition');
+    assert(identityMismatch.identityWarning && !identityMismatch.selected, 'Suspicious identity match was not held for manual approval');
+    assert(identityMismatch.confidence === 'identity', 'Strong identity fallback was not reported');
+    identityMismatch.selected = true;
+    applyApprovedMerge();
+    assert(db.tables.Players.rows.length === 7, 'Identity match created a duplicate player');
+    assert(db.tables.Players.rows[1][13] === 'p1' && db.tables.Players.rows[1][6] === '18', 'Identity match did not preserve the base ID while applying approved fields');
+    undoLastMerge();
+    assert(getDatabaseStateSnapshot() === beforeMerge, 'Identity-match undo failed');
+
+    // Nickname-only collisions are ambiguous and must stay skipped until resolved.
+    mergeState = createEmptyMergeState();
+    mergeState.incomingDb = { tables: { Players: JSON.parse(JSON.stringify(db.tables.Players)) } };
+    mergeState.incomingDb.tables.Players.rows[1][1] = 'Different';
+    mergeState.incomingDb.tables.Players.rows[1][2] = 'Person';
+    mergeState.incomingDb.tables.Players.rows[1][3] = '02.02.2002';
+    mergeState.incomingDb.tables.Players.rows[1][13] = 'nickname-collision';
+    buildMergeProposals();
+    const nicknameConflict = mergeState.proposals.find(proposal => proposal.incomingIndex === 1);
+    assert(nicknameConflict?.action === 'conflict' && !nicknameConflict.selected, 'Nickname collision was automatically added');
+
+    // Recheck automatic additions while applying so two incoming aliases cannot create a pair.
+    const guardedOne = [...db.tables.Players.rows[1]];
+    guardedOne[0] = 'DuplicateGuard'; guardedOne[1] = 'Test'; guardedOne[2] = 'Guard'; guardedOne[3] = '03.03.2003'; guardedOne[13] = 'guard-a';
+    const guardedTwo = [...guardedOne]; guardedTwo[13] = 'guard-b'; guardedTwo[6] = '17';
+    mergeState = createEmptyMergeState();
+    mergeState.incomingDb = { tables: { Players: { header: [...db.tables.Players.header], rows: [guardedOne, guardedTwo] } } };
+    buildMergeProposals();
+    assert(mergeState.proposals.filter(proposal => proposal.action === 'add').length === 2, 'Addition guard fixture was not offered for review');
+    applyApprovedMerge();
+    assert(mergeState.result.added === 1 && mergeState.result.blocked === 1, 'Apply-time duplicate guard did not block the second alias');
+    assert(db.tables.Players.rows.filter(row => row[0] === 'DuplicateGuard').length === 1, 'Apply-time guard left duplicate players');
+    undoLastMerge();
+    assert(getDatabaseStateSnapshot() === beforeMerge, 'Duplicate-guard undo failed');
+
     mergeState = createEmptyMergeState();
     mergeState.incomingDb = { tables: JSON.parse(JSON.stringify(db.tables)) };
     mergeState.incomingDb.tables.Players.rows[1][5] = 'Beta';
@@ -144,7 +211,7 @@
     assert(db.tables.Players.rows[1][5] === 'Beta' && !db.roster_order.Alpha.includes('p1'), 'Approved merge leaves stale roster references');
     undoLastMerge();
     assert(getDatabaseStateSnapshot() === beforeMerge, 'Merge undo failed to restore tables and roster');
-    check('Comparison, selected-player mass editing, merge transfer review/apply and merge undo retain their behavior');
+    check('Comparison, selected-player mass editing, suspicious identity review, duplicate-addition guard, merge transfer and merge undo retain their behavior');
 
     let savedBlob;
     const originalSave = saveEmdbBlob;

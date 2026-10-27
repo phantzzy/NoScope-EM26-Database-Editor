@@ -145,6 +145,8 @@ function getMergeSafetyEventMeta(type) {
         incompleteAddition: ["Incomplete additions skipped", "Incoming records missing required game fields were not added."],
         blankOverwrite: ["Blank overwrites blocked", "Filled Database A values were protected from empty incoming values."],
         internalIdChange: ["ID changes blocked", "Existing internal IDs were preserved."],
+        identityIdMismatch: ["Suspicious player identities", "Matching player details used different internal IDs. These proposals require manual approval."],
+        suspiciousAdditionBlocked: ["Duplicate additions blocked", "An approved automatic addition matched a record already present when the merge was applied."],
         legacyFalseNormalized: ["Legacy false values normalized", "Incoming False/No values for blank-or-1 fields were treated as blank."]
     };
     return meta[type] || ["Safety action", "No additional details."];
@@ -303,6 +305,12 @@ function collectMergeCandidates(keys, index) {
     return [...candidates];
 }
 
+function getMergeStrongFallbackKeys(tableName, table, row) {
+    const keys = getMergeFallbackKeys(tableName, table, row);
+    if (String(tableName).toLowerCase() !== "players") return keys;
+    return keys.filter(key => !key.startsWith("player:nick:"));
+}
+
 function findMergeMatch(tableName, baseTable, incomingTable, incomingRow, indexes) {
     if (!baseTable) return { type: "new", candidates: [] };
     const stableKeys = getMergeStableKeys(tableName, incomingTable, incomingRow);
@@ -312,14 +320,29 @@ function findMergeMatch(tableName, baseTable, incomingTable, incomingRow, indexe
     );
     if (stableCandidates.length === 1) return { type: "exact", baseIndex: stableCandidates[0], candidates: stableCandidates };
     if (stableCandidates.length > 1) return { type: "conflict", candidates: stableCandidates };
+    const fallbackKeys = getMergeFallbackKeys(tableName, incomingTable, incomingRow);
+    if (stableKeys.length && indexes.stable.size && String(tableName).toLowerCase() === "players") {
+        const identityCandidates = collectMergeCandidates(
+            getMergeStrongFallbackKeys(tableName, incomingTable, incomingRow),
+            indexes.fallback
+        );
+        if (identityCandidates.length === 1) {
+            return { type: "identity", baseIndex: identityCandidates[0], candidates: identityCandidates, idMismatch: true };
+        }
+        if (identityCandidates.length > 1) return { type: "conflict", candidates: identityCandidates, idMismatch: true };
+        const nicknameCandidates = collectMergeCandidates(fallbackKeys, indexes.fallback);
+        if (nicknameCandidates.length) return { type: "conflict", candidates: nicknameCandidates, idMismatch: true };
+        return { type: "new", candidates: [] };
+    }
     if (stableKeys.length && indexes.stable.size) return { type: "new", candidates: [] };
-    const fallbackCandidates = collectMergeCandidates(
-        getMergeFallbackKeys(tableName, incomingTable, incomingRow),
-        indexes.fallback
-    );
+    const fallbackCandidates = collectMergeCandidates(fallbackKeys, indexes.fallback);
     if (fallbackCandidates.length === 1) return { type: "strong", baseIndex: fallbackCandidates[0], candidates: fallbackCandidates };
     if (fallbackCandidates.length > 1) return { type: "conflict", candidates: fallbackCandidates };
     return { type: "new", candidates: [] };
+}
+
+function getMergeInternalId(table, row) {
+    return getMergeValue(table, row, ["internalid", "playerid", "teamid", "staffid", "sponsorid", "tournamentid", "id"]);
 }
 
 function getMergeEntityLabel(tableName, table, row, fallbackIndex = 0) {
@@ -487,6 +510,17 @@ function createMergeProposal(tableName, baseTable, incomingTable, incomingRow, i
         addMergeSafetyEvent("incompleteAddition", tableName, incomingLabel, `Missing ${getMissingMergeRequiredFields(tableName, incomingTable, incomingRow).join(", ")}`);
         return null;
     }
+    const baseId = baseRow ? getMergeInternalId(baseTable, baseRow) : "";
+    const incomingId = getMergeInternalId(incomingTable, incomingRow);
+    const identityIdMismatch = Boolean(
+        !isAddition
+        && baseId
+        && incomingId
+        && normalizeMergeIdentity(baseId) !== normalizeMergeIdentity(incomingId)
+    );
+    if (identityIdMismatch) {
+        addMergeSafetyEvent("identityIdMismatch", tableName, incomingLabel, `Database A ID ${baseId}; Database B ID ${incomingId}`);
+    }
     const fieldDiffs = buildMergeFieldDiffs(tableName, baseTable, baseRow, incomingTable, incomingRow, isAddition, incomingLabel);
     const identityDiffs = isAddition ? [] : fieldDiffs.filter(diff => isMergeIdentityDiff(tableName, diff));
     const hasTransfer = tableName.toLowerCase() === "players"
@@ -498,13 +532,15 @@ function createMergeProposal(tableName, baseTable, incomingTable, incomingRow, i
         incomingLabel,
         baseLabel,
         identityChanged: identityDiffs.length > 0,
+        identityWarning: identityIdMismatch,
+        identityWarningDetail: identityIdMismatch ? `Database A ID ${baseId}; Database B ID ${incomingId}` : "",
         identityDiffs,
         action: isAddition ? "add" : hasTransfer ? "transfer" : "update",
         confidence: isAddition ? "new" : match.type,
         incomingIndex,
         baseIndex,
         candidates: match.candidates || [],
-        selected: fieldDiffs.length > 0 && !identityDiffs.length,
+        selected: fieldDiffs.length > 0 && !identityDiffs.length && !identityIdMismatch,
         fieldDiffs
     };
 }
@@ -580,6 +616,7 @@ function resolveMergeConflict(proposal, choice) {
         return;
     }
     replacement.id = proposal.id;
+    replacement.explicitAddition = choice === "add";
     const proposalIndex = mergeState.proposals.findIndex(item => item.id === proposal.id);
     if (proposalIndex >= 0) mergeState.proposals[proposalIndex] = replacement;
 }
@@ -929,7 +966,7 @@ function getMergeProposalCounts() {
     const counts = { add: 0, update: 0, transfer: 0, conflict: 0, risky: 0 };
     mergeState.proposals.forEach(proposal => {
         if (counts[proposal.action] !== undefined) counts[proposal.action] += 1;
-        if (proposal.identityChanged) counts.risky += 1;
+        if (proposal.identityChanged || proposal.identityWarning) counts.risky += 1;
     });
     return counts;
 }
@@ -983,8 +1020,8 @@ function createMergeSafetyReport(options = {}) {
     title.textContent = summary.length ? "Safety report" : "Safety report clean";
     const note = document.createElement("span");
     note.textContent = summary.length
-        ? "NoScope blocked risky incoming values before they reached the review list."
-        : "No risky blank overwrites, incomplete additions, or protected ID changes were detected.";
+        ? "NoScope blocked unsafe values and marked suspicious player identities for manual review."
+        : "No risky blank overwrites, incomplete additions, protected ID changes, or suspicious player identities were detected.";
     heading.append(title, note);
     section.appendChild(heading);
     if (!summary.length) return section;
@@ -1064,7 +1101,7 @@ function createMergeReviewToolbar() {
     clean.textContent = "Approve safe";
     clean.addEventListener("click", () => {
         getFilteredMergeProposals().forEach(proposal => {
-            if (proposal.action !== "conflict" && !proposal.identityChanged) proposal.selected = true;
+            if (proposal.action !== "conflict" && !proposal.identityChanged && !proposal.identityWarning) proposal.selected = true;
         });
         renderMergeModal();
     });
@@ -1210,6 +1247,7 @@ function createMergeConflictControl(proposal) {
 function createMergeProposalRow(proposal) {
     const article = document.createElement("article");
     article.className = `merge-proposal merge-proposal-${proposal.action}`;
+    article.classList.toggle("merge-proposal-suspicious", Boolean(proposal.identityWarning));
     const header = document.createElement("div");
     header.className = "merge-proposal-header";
     const checkbox = document.createElement("input");
@@ -1268,6 +1306,12 @@ function createMergeProposalRow(proposal) {
             changed.textContent = "Identity changed";
             title.appendChild(changed);
         }
+        if (proposal.identityWarning) {
+            const warning = document.createElement("em");
+            warning.className = "merge-identity-warning-badge";
+            warning.textContent = "ID mismatch";
+            title.appendChild(warning);
+        }
     }
     const meta = document.createElement("span");
     meta.textContent = `${proposal.tableName} - ${proposal.confidence} match - ${proposal.fieldDiffs.length} change${proposal.fieldDiffs.length === 1 ? "" : "s"}`;
@@ -1278,6 +1322,12 @@ function createMergeProposalRow(proposal) {
         identitySummary.textContent = getMergeIdentityDiffSummary(proposal.identityDiffs);
         identity.appendChild(identitySummary);
     }
+    if (proposal.identityWarning) {
+        const warningSummary = document.createElement("small");
+        warningSummary.className = "merge-identity-warning-summary";
+        warningSummary.textContent = `${proposal.identityWarningDetail}. Verify this is the same person before approving.`;
+        identity.appendChild(warningSummary);
+    }
     identity.appendChild(meta);
     header.append(checkbox, action, identity);
     article.appendChild(header);
@@ -1287,10 +1337,10 @@ function createMergeProposalRow(proposal) {
         return article;
     }
     const details = document.createElement("details");
-    details.open = proposal.identityChanged;
+    details.open = proposal.identityChanged || proposal.identityWarning;
     const summary = document.createElement("summary");
-    summary.textContent = proposal.identityChanged
-        ? `Review ${proposal.fieldDiffs.length} field${proposal.fieldDiffs.length === 1 ? "" : "s"} - identity changes shown first`
+    summary.textContent = proposal.identityChanged || proposal.identityWarning
+        ? `Review ${proposal.fieldDiffs.length} field${proposal.fieldDiffs.length === 1 ? "" : "s"} - identity verification required`
         : `Review ${proposal.fieldDiffs.length} field${proposal.fieldDiffs.length === 1 ? "" : "s"}`;
     const fields = document.createElement("div");
     fields.className = "merge-field-diffs";
@@ -1362,10 +1412,10 @@ function renderMergeResultStep() {
     icon.className = "merge-result-icon";
     icon.textContent = "OK";
     const heading = document.createElement("div");
-    heading.innerHTML = `<span>Merge applied to Database A</span><h3>${result.total} approved record${result.total === 1 ? "" : "s"} processed</h3><p>The merged database has unsaved changes. Save it as a new .emdb when the result looks right.</p>`;
+    heading.innerHTML = `<span>Merge applied to Database A</span><h3>${result.total} approved record${result.total === 1 ? "" : "s"} applied${result.blocked ? `; ${result.blocked} suspicious addition${result.blocked === 1 ? "" : "s"} blocked` : ""}</h3><p>${result.total ? "The merged database has unsaved changes. Save it as a new .emdb when the result looks right." : "No database rows were changed. Review the safety report before trying again."}</p>`;
     const counts = document.createElement("div");
     counts.className = "merge-result-counts";
-    [["added", "Added"], ["updated", "Updated"], ["transferred", "Transferred"], ["warnings", "Warnings"]].forEach(([key, label]) => {
+    [["added", "Added"], ["updated", "Updated"], ["transferred", "Transferred"], ["blocked", "Blocked"]].forEach(([key, label]) => {
         const item = document.createElement("span");
         item.innerHTML = `<b>${result[key]}</b><small>${label}</small>`;
         counts.appendChild(item);
@@ -1511,7 +1561,29 @@ function countMissingRequiredRecords(tableName, table) {
     }, 0);
 }
 
-function getMergePostValidationSummary() {
+function getMergeSuspiciousPlayerIdentityPairs(tables = db.tables) {
+    const tableName = Object.keys(tables || {}).find(name => name.toLowerCase() === "players");
+    const table = tableName ? tables[tableName] : null;
+    const pairs = new Set();
+    if (!table) return pairs;
+    const index = new Map();
+    table.rows.forEach((row, rowIndex) => {
+        getMergeStrongFallbackKeys("Players", table, row).forEach(key => {
+            if (!index.has(key)) index.set(key, []);
+            index.get(key).push(rowIndex);
+        });
+    });
+    index.forEach(indexes => {
+        for (let left = 0; left < indexes.length; left += 1) {
+            for (let right = left + 1; right < indexes.length; right += 1) {
+                pairs.add(`${indexes[left]}:${indexes[right]}`);
+            }
+        }
+    });
+    return pairs;
+}
+
+function getMergePostValidationSummary(previousTables = null) {
     const checks = [];
     Object.entries(db.tables).forEach(([tableName, table]) => {
         const missingRequired = countMissingRequiredRecords(tableName, table);
@@ -1532,6 +1604,27 @@ function getMergePostValidationSummary() {
             label: "Duplicate internal IDs",
             count: duplicateIds,
             detail: "Duplicate IDs can break identity and asset lookups."
+        });
+    }
+
+    const suspiciousIdentityPairs = getMergeSuspiciousPlayerIdentityPairs();
+    const previousIdentityPairs = previousTables ? getMergeSuspiciousPlayerIdentityPairs(previousTables) : new Set();
+    const newIdentityPairs = [...suspiciousIdentityPairs].filter(pair => !previousIdentityPairs.has(pair)).length;
+    if (newIdentityPairs) {
+        checks.push({
+            tone: "danger",
+            label: "New suspicious duplicate players",
+            count: newIdentityPairs,
+            detail: "These rows share strong identity details. Undo the merge or review them in Validator before saving."
+        });
+    }
+    const existingIdentityPairs = suspiciousIdentityPairs.size - newIdentityPairs;
+    if (existingIdentityPairs) {
+        checks.push({
+            tone: "warning",
+            label: "Pre-existing suspicious player pairs",
+            count: existingIdentityPairs,
+            detail: "These matching identities were already present before this merge and remain visible in Validator."
         });
     }
 
@@ -1570,6 +1663,17 @@ function getMergePostValidationSummary() {
     });
 
     return checks;
+}
+
+function findMergeAdditionCollision(proposal) {
+    const currentTable = getMergeTable(db, proposal.tableName);
+    const incomingTable = mergeState.incomingDb.tables[proposal.tableName];
+    const incomingRow = incomingTable?.rows?.[proposal.incomingIndex];
+    if (!currentTable || !incomingTable || !incomingRow) return { type: "new", candidates: [] };
+    return findMergeMatch(proposal.tableName, currentTable, incomingTable, incomingRow, {
+        stable: buildMergeKeyIndex(proposal.tableName, currentTable, getMergeStableKeys),
+        fallback: buildMergeKeyIndex(proposal.tableName, currentTable, getMergeFallbackKeys)
+    });
 }
 
 function createMergeHealthSummary(checks = []) {
@@ -1613,9 +1717,22 @@ function applyApprovedMerge() {
         activeTab,
         hasUnsavedChanges
     };
-    const result = { total: approved.length, added: 0, updated: 0, transferred: 0, warnings: 0 };
+    const result = { total: 0, attempted: approved.length, added: 0, updated: 0, transferred: 0, blocked: 0, warnings: 0 };
     const affectedPlayerIndexes = new Set();
     approved.forEach(proposal => {
+        if (proposal.action === "add" && !proposal.explicitAddition) {
+            const collision = findMergeAdditionCollision(proposal);
+            if (collision.type !== "new") {
+                result.blocked += 1;
+                addMergeSafetyEvent(
+                    "suspiciousAdditionBlocked",
+                    proposal.tableName,
+                    proposal.label,
+                    "Matched an existing record while applying the merge"
+                );
+                return;
+            }
+        }
         const { tableName, table } = ensureMergeTargetTable(proposal);
         let row;
         let rowIndex;
@@ -1641,6 +1758,7 @@ function applyApprovedMerge() {
             updatePlayerRosterReferences(table, previousRow, row);
             affectedPlayerIndexes.add(rowIndex);
         }
+        result.total += 1;
     });
     const playersTable = getMergeTable(db, "Players");
     if (playersTable) {
@@ -1651,16 +1769,20 @@ function applyApprovedMerge() {
             });
         }
     }
-    result.warnings = countMergeTeamWarnings(affectedPlayerIndexes) + countMergeDuplicateIdWarnings();
-    result.healthChecks = getMergePostValidationSummary();
+    const currentIdentityPairs = getMergeSuspiciousPlayerIdentityPairs();
+    const previousIdentityPairs = getMergeSuspiciousPlayerIdentityPairs(lastMergeUndo.tables);
+    const newIdentityPairs = [...currentIdentityPairs].filter(pair => !previousIdentityPairs.has(pair)).length;
+    result.warnings = result.blocked + newIdentityPairs + countMergeTeamWarnings(affectedPlayerIndexes) + countMergeDuplicateIdWarnings();
+    result.healthChecks = getMergePostValidationSummary(lastMergeUndo.tables);
     invalidatePlayerLeaderboardRanks();
-    markUnsavedChanges({ preserveMergeUndo: true });
-    btnUndoMerge.hidden = false;
+    if (result.total) markUnsavedChanges({ preserveMergeUndo: true });
+    btnUndoMerge.hidden = result.total === 0;
     mergeState.result = result;
     const previousTab = activeTab;
     buildUI();
     if (previousTab && db.tables[previousTab]) switchTab(previousTab);
-    setStatus(`Merged ${result.total} approved record${result.total === 1 ? "" : "s"} into ${db.fileName || "Database A"}.`, "success");
+    const blockedMessage = result.blocked ? ` ${result.blocked} suspicious addition${result.blocked === 1 ? " was" : "s were"} blocked.` : "";
+    setStatus(`Merged ${result.total} approved record${result.total === 1 ? "" : "s"} into ${db.fileName || "Database A"}.${blockedMessage}`, result.blocked ? "warning" : "success");
     setMergeStep("result");
 }
 
