@@ -42,7 +42,7 @@ internal static class Program
 internal sealed class InstallerForm : Form
 {
     private const string AppName = "NoScope";
-    private const string AppVersion = "3.0.0";
+    private const string AppVersion = "3.0.0-beta.1";
     private const int TitleBarHeight = 40;
     private static readonly Color AppBackground = Color.FromArgb(13, 15, 22);
     private static readonly Color SidebarBackground = Color.FromArgb(8, 10, 15);
@@ -77,7 +77,7 @@ internal sealed class InstallerForm : Form
 
     private void BuildLayout()
     {
-        Text = uninstallMode ? "Uninstall NoScope" : "Install NoScope";
+        Text = uninstallMode ? "Uninstall NoScope" : $"Install NoScope v{AppVersion}";
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
         MaximizeBox = false;
@@ -334,7 +334,7 @@ internal sealed class InstallerForm : Form
 
         string? installedPath = GetInstalledPath();
         bool updatingExistingInstall = !string.IsNullOrWhiteSpace(installedPath);
-        title.Text = updatingExistingInstall ? "Update NoScope" : "Install NoScope";
+        title.Text = updatingExistingInstall ? "Update NoScope Beta" : "Install NoScope Beta";
         subtitle.Text = updatingExistingInstall
             ? "Update the installed desktop editor while keeping the same install location."
             : "Install the standalone desktop editor with local file access and native save dialogs.";

@@ -1,6 +1,6 @@
 # Contributing to NoScope
 
-Use `beta` for work on v3.0.0 and open pull requests against it. `main` remains the stable v2.3.0 source; cleanup commits do not promote beta features into a stable release.
+Use `beta` for work on v3.0.0-beta.1 and open pull requests against it. Manual testing and stability confirmation are pending. `main` remains the stable v2.3.0 source; beta changes do not promote features into a stable release.
 
 ## Run the desktop editor
 

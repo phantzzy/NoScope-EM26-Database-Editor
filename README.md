@@ -2,7 +2,9 @@
 
 NoScope is a community-built Windows desktop editor for Esports Manager `.emdb` database files. It provides a visual interface for browsing, searching, comparing, filtering, creating, editing, validating, and merging database records without manually working with the CSV files stored inside an `.emdb` archive.
 
-NoScope currently targets the database structure used by Esports Manager 2026. The current beta is `v3.0.0` (game version `1.1.4`); full release notes are available in the built-in Changelog panel and under [`changelogs/`](changelogs/).
+NoScope currently targets the database structure used by Esports Manager 2026. The current build is **v3.0.0-beta.1** (game version `1.1.4`); full release notes are available in the built-in Changelog panel and under [`changelogs/`](changelogs/).
+
+This beta is awaiting manual testing, and stability is not yet confirmed. Automated checks have passed, but in-game testing remains pending. Keep original databases backed up and save edits under a new filename.
 
 The working tree includes compatibility fixes verified against the developer database supplied on 27 October 2026. See the [compatibility report](docs/compatibility-2026-10-27.md) for supported fields, source-data issues, and repeatable regression tests.
 
@@ -32,7 +34,7 @@ The working tree includes compatibility fixes verified against the developer dat
 - Pagination with first, previous, next, last, and validated page-jump controls.
 - Multi-select in card and list views with Deselect all support.
 - Horizontal scrolling for wide list views.
-- Built-in Guide, Library, Assets, Changelog, Steam, and GitHub links.
+- Built-in Guide, Library, Changelog, Steam, and GitHub links. The Assets tab is temporarily hidden in this beta.
 
 ### Players
 
@@ -213,13 +215,12 @@ The editor can:
 - Remove a local override.
 - Download a direct image URL with the identifier-based filename expected by the game.
 
-The desktop Assets panel can download the shared image library into the configured game CustomAssets folder. Downloads require internet access.
+The desktop Assets panel is temporarily hidden in this beta. Existing record image previews and editing remain available.
 
 ### 9. Use the built-in reference panels
 
 - **Guide** provides task-based instructions and screenshots.
 - **Library** provides database downloads and source links.
-- **Assets** links to the shared CustomAssets folder.
 - **Changelog** contains expandable app release notes.
 - The Steam button opens the official Esports Manager 2026 page; GitHub opens the NoScope source repository.
 - The theme button switches between dark and light mode.

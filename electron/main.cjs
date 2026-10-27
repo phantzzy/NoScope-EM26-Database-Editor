@@ -4,6 +4,7 @@ const fsSync = require("node:fs");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { normalizeVersion, compareVersions } = require("./version.cjs");
 
 const APP_SCHEME = "noscope";
 const REMOTE_ASSET_MANIFEST_URL = "https://noscope-assets.pages.dev/manifest.json";
@@ -131,26 +132,6 @@ function normalizeCustomAssetRootSelection(folderPath) {
 
 function getRemoteAssetCacheRoot() {
     return path.join(app.getPath("userData"), "RemoteAssetsCache");
-}
-
-function normalizeVersion(value) {
-    return String(value || "")
-        .trim()
-        .replace(/^v/i, "")
-        .split(/[+-]/)[0];
-}
-
-function compareVersions(left, right) {
-    const leftParts = normalizeVersion(left).split(".").map(part => Number.parseInt(part, 10) || 0);
-    const rightParts = normalizeVersion(right).split(".").map(part => Number.parseInt(part, 10) || 0);
-    const maxLength = Math.max(leftParts.length, rightParts.length, 3);
-
-    for (let index = 0; index < maxLength; index++) {
-        const delta = (leftParts[index] || 0) - (rightParts[index] || 0);
-        if (delta !== 0) return delta > 0 ? 1 : -1;
-    }
-
-    return 0;
 }
 
 function findInstallerAsset(release) {

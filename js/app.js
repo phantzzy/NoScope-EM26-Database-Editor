@@ -1588,6 +1588,7 @@ if (capabilities.updater) {
 }
 
 function openAssetsPanel() {
+    if (btnAssets.hidden) return;
     assetsModal.hidden = false;
     if (capabilities.cloudAssetInstall && !cloudAssetsStatus.dataset.tone) {
         btnInstallCloudAssets.disabled = false;
