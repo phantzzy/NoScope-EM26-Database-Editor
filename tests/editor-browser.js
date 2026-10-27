@@ -62,6 +62,8 @@
             equal(mergeState.proposals.length, reportedDuplicateIds.size, 'Reported MOUZ duplicates did not all reach merge review');
             assert(mergeState.proposals.every(proposal => proposal.action !== 'add'), 'Reported MOUZ duplicate was offered as an automatic addition');
             assert(mergeState.proposals.every(proposal => proposal.identityWarning && !proposal.selected), 'Reported MOUZ ID mismatch was not held for manual review');
+            mergeState.reviewFilter.identity = 'id-mismatch';
+            equal(getFilteredMergeProposals().length, reportedDuplicateIds.size, 'ID mismatch filter did not isolate all four reported MOUZ players');
             sourcePlayers.rows = originalRows;
             mergeState = createEmptyMergeState();
             check('The four reported MOUZ duplicate identities are matched, highlighted and left unselected instead of being added again');
@@ -170,6 +172,9 @@
     assert(identityMismatch?.action === 'update', 'Different player ID was proposed as a duplicate addition');
     assert(identityMismatch.identityWarning && !identityMismatch.selected, 'Suspicious identity match was not held for manual approval');
     assert(identityMismatch.confidence === 'identity', 'Strong identity fallback was not reported');
+    mergeState.reviewFilter.identity = 'id-mismatch';
+    equal(getFilteredMergeProposals(), [identityMismatch], 'ID mismatch filter did not isolate suspicious identity matches');
+    mergeState.reviewFilter.identity = 'all';
     identityMismatch.selected = true;
     applyApprovedMerge();
     assert(db.tables.Players.rows.length === 7, 'Identity match created a duplicate player');

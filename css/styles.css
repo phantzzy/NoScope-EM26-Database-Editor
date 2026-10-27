@@ -1204,7 +1204,7 @@ body.noscope-desktop .desktop-titlebar {
 .merge-safety-report-compact .merge-safety-grid { grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
 .merge-safety-report-compact .merge-safety-grid article { align-items:center; }
 .merge-result-step .merge-safety-grid,.merge-result-step .merge-health-grid { grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:10px; }
-.merge-review-toolbar { position:sticky; top:0; z-index:4; display:grid; grid-template-columns:160px 145px minmax(180px,1fr) auto auto; gap:8px; padding:12px 18px; border-bottom:1px solid #2d3239; background:#17191e; }
+.merge-review-toolbar { position:sticky; top:0; z-index:4; display:grid; grid-template-columns:150px 135px 165px minmax(180px,1fr) auto auto; gap:8px; padding:12px 18px; border-bottom:1px solid #2d3239; background:#17191e; }
 .merge-review-toolbar select,.merge-review-toolbar input,.merge-review-toolbar button { min-width:0; height:34px; padding:0 10px; border:1px solid #343a43; border-radius:3px; outline:none; background:#22262c; color:#dce0e5; font:.68rem var(--font-sans); }
 .merge-review-toolbar select:focus,.merge-review-toolbar input:focus { border-color:var(--accent); }
 .merge-review-toolbar button { cursor:pointer; }

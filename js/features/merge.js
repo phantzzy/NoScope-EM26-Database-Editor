@@ -92,7 +92,7 @@ function createEmptyMergeState() {
         proposals: [],
         safetyEvents: [],
         unchangedCount: 0,
-        reviewFilter: { table: "all", action: "all", search: "" },
+        reviewFilter: { table: "all", action: "all", identity: "all", search: "" },
         reviewPage: 1,
         result: null
     };
@@ -972,11 +972,12 @@ function getMergeProposalCounts() {
 }
 
 function getFilteredMergeProposals() {
-    const { table, action, search } = mergeState.reviewFilter;
+    const { table, action, identity = "all", search } = mergeState.reviewFilter;
     const query = search.trim().toLowerCase();
     return mergeState.proposals.filter(proposal => {
         if (table !== "all" && proposal.tableName !== table) return false;
         if (action !== "all" && proposal.action !== action) return false;
+        if (identity === "id-mismatch" && !proposal.identityWarning) return false;
         const searchable = [
             proposal.label,
             proposal.baseLabel,
@@ -1087,6 +1088,21 @@ function createMergeReviewToolbar() {
         mergeState.reviewPage = 1;
         renderMergeModal();
     });
+    const identitySelect = document.createElement("select");
+    identitySelect.setAttribute("aria-label", "Filter by identity warning");
+    const mismatchCount = mergeState.proposals.filter(proposal => proposal.identityWarning).length;
+    [["all", "All review items"], ["id-mismatch", `ID mismatches (${mismatchCount})`]].forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        identitySelect.appendChild(option);
+    });
+    identitySelect.value = mergeState.reviewFilter.identity || "all";
+    identitySelect.addEventListener("change", () => {
+        mergeState.reviewFilter.identity = identitySelect.value;
+        mergeState.reviewPage = 1;
+        renderMergeModal();
+    });
     const search = document.createElement("input");
     search.type = "search";
     search.placeholder = "Search review...";
@@ -1112,7 +1128,7 @@ function createMergeReviewToolbar() {
         getFilteredMergeProposals().forEach(proposal => { proposal.selected = false; });
         renderMergeModal();
     });
-    toolbar.append(tableSelect, actionSelect, search, clean, none);
+    toolbar.append(tableSelect, actionSelect, identitySelect, search, clean, none);
     return toolbar;
 }
 
