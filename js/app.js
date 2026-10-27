@@ -3,45 +3,8 @@ const AES_KEY_HEX = "E47A2C9F01D85B33A6F27EC4980D4B613EB5792ADF148C506FC3279105E
 const TABLE_FILES = ["Players.csv", "Sponsors.csv", "Staff.csv", "Teams.csv", "Tournaments.csv"];
 const ROSTER_FILE = "roster_order.json";
 const PAGE_SIZE = 25;
-const LIBRARY_DATABASES = [
-    {
-        id: "noscope",
-        name: "NoScope Default DB",
-        fileName: "pzy_s_-_NoScope_MEGA_DB.emdb",
-        owner: "NoScope",
-        sourceUrl: "https://emdb.gg/?clone=user%3A76561198403405269%3A1"
-    },
-    {
-        id: "em2026-default",
-        name: "Default EM2026 Database",
-        fileName: "database.emdb",
-        owner: "EM2026 Developers",
-        sourceUrl: "https://emdb.gg/?view=default"
-    },
-    {
-        id: "luca",
-        name: "Luca's GLOBAL UPDATED",
-        fileName: "luccaneta_s_GLOBAL_UPDATED.emdb",
-        owner: "Luca",
-        sourceUrl: "https://emdb.gg/?view=user%3A76561199587057820%3A1"
-    },
-    {
-        id: "world-updated",
-        name: "4's WorldUpdated",
-        fileName: "World_Updated.emdb",
-        owner: "4",
-        sourceUrl: "https://emdb.gg/?view=user%3A76561199766255887%3A2"
-    },
-    {
-        id: "roy",
-        name: "Roy's EMDB Personal Edition",
-        fileName: "Roys_EMDB__Personnal_Edition_.emdb",
-        owner: "Roy",
-        sourceUrl: "https://emdb.gg/?view=user%3A76561198094654818%3A1"
-    }
-];
-const DEFAULT_LIBRARY_DATABASE = LIBRARY_DATABASES[0];
-const DEFAULT_DB_FILE = DEFAULT_LIBRARY_DATABASE.fileName;
+const LIBRARY_DATABASES = window.NOSCOPE_LIBRARY_DATABASES;
+const DEFAULT_LIBRARY_DATABASE = LIBRARY_DATABASES.find(entry => entry.default);
 const CONTENT_CREATOR_META_STORAGE_KEY = "noscopeContentCreators:v1";
 const CONTENT_CREATOR_FILTER_KEY = "__noscopeContentCreator";
 const REMOTE_ASSET_MANIFEST_URL = "https://noscope-assets.pages.dev/manifest.json";
@@ -350,7 +313,6 @@ let currentAssetKey = null;
 let pendingAsset = undefined;
 let remoteAssetManifest = null;
 let remoteAssetBaseUrl = "https://noscope-assets.pages.dev";
-let remoteLibraryDatabases = [];
 let remoteManifestLoadPromise = null;
 const remoteAssetCacheRequests = new Set();
 let editorMissingRequiredColumns = new Set();
@@ -827,106 +789,24 @@ async function readResponseAsBlobWithProgress(response, onProgress) {
     return new Blob(chunks);
 }
 
-function getRemoteDatabaseUrl(entry) {
-    if (!entry?.remoteUrl) return "";
-    try {
-        const parsed = new URL(entry.remoteUrl);
-        return parsed.protocol === "https:" ? parsed.toString() : "";
-    } catch {
-        return "";
-    }
-}
-
-function getRemoteDatabaseManifestEntries(manifest) {
-    const databases = manifest?.Databases;
-    if (Array.isArray(databases)) return databases;
-    if (!databases || typeof databases !== "object") return [];
-    return Object.entries(databases).map(([key, value]) => {
-        if (typeof value === "string") return { id: key, path: value };
-        if (value && typeof value === "object") return { id: value.id || key, ...value };
-        return null;
-    }).filter(Boolean);
-}
-
-function normalizeRemoteDatabaseEntries(manifest, baseUrl = remoteAssetBaseUrl) {
-    const entries = getRemoteDatabaseManifestEntries(manifest);
-    return entries.map((entry, index) => {
-        if (!entry || typeof entry !== "object") return null;
-        const rawFileName = String(entry.fileName || "").trim();
-        const rawPath = String(entry.path || "").trim();
-        const rawUrl = String(entry.url || "").trim();
-        let fileName = rawFileName;
-
-        if (!fileName && rawPath) {
-            try {
-                fileName = decodeURIComponent(rawPath.split("/").pop() || "");
-            } catch {
-                fileName = rawPath.split("/").pop() || "";
-            }
-        }
-
-        if (!fileName && rawUrl) {
-            try {
-                const parsedUrl = new URL(rawUrl);
-                fileName = decodeURIComponent(parsedUrl.pathname.split("/").pop() || "");
-            } catch {
-                fileName = "";
-            }
-        }
-
-        if (!/\.emdb$/i.test(fileName)) return null;
-
-        const safeBaseUrl = String(baseUrl || remoteAssetBaseUrl).replace(/\/+$/, "");
-        const remotePath = rawPath || `Databases/${encodeURIComponent(fileName)}`;
-        const remoteUrl = rawUrl
-            ? new URL(rawUrl.replace(/^\/+/, ""), `${safeBaseUrl}/`).toString()
-            : new URL(remotePath.replace(/^\/+/, ""), `${safeBaseUrl}/`).toString();
-        const idBase = String(entry.id || fileName.replace(/\.emdb$/i, "") || `database-${index + 1}`)
-            .normalize("NFKC")
-            .toLowerCase();
-        const updated = entry.updated ? new Date(entry.updated) : null;
-
-        return {
-            id: `cloud:${idBase}`,
-            name: String(entry.name || fileName.replace(/\.emdb$/i, "")).trim(),
-            fileName,
-            owner: String(entry.owner || "NoScope Cloud").trim(),
-            sourceUrl: String(entry.sourceUrl || remoteUrl).trim(),
-            remoteUrl,
-            remotePath,
-            remote: true,
-            default: Boolean(entry.default),
-            size: Number(entry.size) || 0,
-            updated: updated instanceof Date && !Number.isNaN(updated.getTime()) ? updated : null
-        };
-    }).filter(entry => entry && getRemoteDatabaseUrl(entry));
-}
-
 function getLibraryDatabaseEntries() {
-    if (!remoteLibraryDatabases.length) return [...LIBRARY_DATABASES];
-    const remoteKeys = new Set(remoteLibraryDatabases.map(entry => normalizeFieldName(entry.fileName || entry.id)));
-    const bundledFallbacks = LIBRARY_DATABASES.filter(entry => !remoteKeys.has(normalizeFieldName(entry.fileName || entry.id)));
-    return [...remoteLibraryDatabases, ...bundledFallbacks];
+    return [...LIBRARY_DATABASES];
 }
 
 function getDefaultLibraryDatabaseEntry() {
-    const defaultFileKey = normalizeFieldName(DEFAULT_LIBRARY_DATABASE.fileName);
-    return remoteLibraryDatabases.find(entry => entry.default)
-        || remoteLibraryDatabases.find(entry => normalizeFieldName(entry.fileName) === defaultFileKey)
-        || DEFAULT_LIBRARY_DATABASE;
+    return DEFAULT_LIBRARY_DATABASE;
 }
 
-function ensureRemoteManifestLoaded() {
-    return remoteManifestLoadPromise || Promise.resolve();
+function getLibraryDatabasePath(entry) {
+    return `data/${encodeURIComponent(entry.fileName)}`;
 }
 
 async function getLibraryDatabaseSummary(entry) {
     const cached = librarySummaryCache.get(entry.id);
     if (cached) return cached;
-    const path = getRemoteDatabaseUrl(entry) || `data/${entry.fileName}`;
+    const path = getLibraryDatabasePath(entry);
     const response = await fetch(path, { cache: "no-store" });
     if (!response.ok) throw new Error(`${entry.name} request failed (${response.status})`);
-    const lastModified = response.headers.get("Last-Modified");
     const blob = await response.blob();
     const decryptedZipBuffer = await decryptEMDB(await blob.arrayBuffer());
     const zip = await JSZip.loadAsync(decryptedZipBuffer);
@@ -945,7 +825,6 @@ async function getLibraryDatabaseSummary(entry) {
     const summary = {
         ...entry,
         path,
-        lastUpdated: entry.updated || (lastModified ? new Date(lastModified) : null),
         counts
     };
     librarySummaryCache.set(entry.id, summary);
@@ -954,14 +833,6 @@ async function getLibraryDatabaseSummary(entry) {
 
 function formatLibraryCount(value) {
     return new Intl.NumberFormat().format(Number(value) || 0);
-}
-
-function formatLibraryTimestamp(value) {
-    if (!(value instanceof Date) || Number.isNaN(value.getTime())) return "Last updated: unknown";
-    return `Last updated: ${new Intl.DateTimeFormat(undefined, {
-        dateStyle: "full",
-        timeStyle: "long"
-    }).format(value)}`;
 }
 
 function getLibraryStatIcon(label) {
@@ -988,10 +859,10 @@ function createLibraryDatabaseCard(summary) {
     const name = document.createElement("h3");
     name.textContent = summary.name;
     const meta = document.createElement("p");
-    meta.textContent = `by ${summary.owner} - ${summary.remote ? "Cloudflare database" : "bundled fallback database"} - ${summary.fileName}`;
+    meta.textContent = `${summary.owner ? `by ${summary.owner} - ` : ""}Bundled database - ${summary.fileName}`;
     const updated = document.createElement("p");
     updated.className = "library-db-updated";
-    updated.textContent = formatLibraryTimestamp(summary.lastUpdated);
+    updated.textContent = summary.default ? "Default database from the developers." : "Included for offline use.";
     title.append(name, meta, updated);
     header.appendChild(title);
     const stats = document.createElement("div");
@@ -1025,14 +896,18 @@ function createLibraryDatabaseCard(summary) {
     download.href = summary.path;
     download.download = summary.fileName;
     download.innerHTML = '<span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11 3h2v9l3.3-3.3 1.4 1.4L12 15.8l-5.7-5.7 1.4-1.4L11 12V3Zm-6 14h2v2h10v-2h2v4H5v-4Z"/></svg></span> Download';
-    const source = document.createElement("a");
-    source.className = "library-db-action";
-    source.href = summary.sourceUrl;
-    source.target = "_blank";
-    source.rel = "noopener";
-    source.innerHTML = `<span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.41l-8.3 8.3-1.4-1.42 8.29-8.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/></svg></span> ${summary.remote ? "Cloudflare" : "EMDB.GG"}`;
-    [download, source].forEach(link => link.addEventListener("click", event => event.stopPropagation()));
-    actions.append(download, source);
+    download.addEventListener("click", event => event.stopPropagation());
+    actions.append(download);
+    if (summary.sourceUrl) {
+        const source = document.createElement("a");
+        source.className = "library-db-action";
+        source.href = summary.sourceUrl;
+        source.target = "_blank";
+        source.rel = "noopener";
+        source.innerHTML = `<span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.41l-8.3 8.3-1.4-1.42 8.29-8.29H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/></svg></span> Source`;
+        source.addEventListener("click", event => event.stopPropagation());
+        actions.append(source);
+    }
     card.append(header, stats, actions, hint);
     const openDatabase = () => requestUnsavedChangesAction(async () => {
         const loaded = await loadBundledDatabase(summary, card);
@@ -1050,12 +925,11 @@ function createLibraryDatabaseCard(summary) {
 async function renderLibraryPanel() {
     libraryDatabaseList.innerHTML = '<div class="library-loading">Loading database library...</div>';
     try {
-        await ensureRemoteManifestLoaded();
         const summaries = await Promise.all(getLibraryDatabaseEntries().map(entry => getLibraryDatabaseSummary(entry)));
         libraryDatabaseList.replaceChildren(...summaries.map(summary => createLibraryDatabaseCard(summary)));
     } catch (error) {
         console.error(error);
-        libraryDatabaseList.innerHTML = '<div class="library-error">Unable to read the database library. Check the Cloudflare manifest or open NoScope through localhost for bundled fallbacks.</div>';
+        libraryDatabaseList.innerHTML = '<div class="library-error">The bundled Library files are missing or unreadable. Reinstall NoScope, or use Open .emdb to select a local database.</div>';
     }
 }
 
@@ -1862,7 +1736,7 @@ async function loadEMDBFile(file, options = {}) {
 }
 
 async function fetchBundledDatabaseBlob(entry = DEFAULT_LIBRARY_DATABASE, onProgress) {
-    const path = getRemoteDatabaseUrl(entry) || `data/${entry.fileName}`;
+    const path = getLibraryDatabasePath(entry);
     const response = await fetch(path, { cache: "no-store" });
     if (!response.ok) throw new Error(`${entry.name} request failed (${response.status})`);
     return readResponseAsBlobWithProgress(response, onProgress);
@@ -1885,7 +1759,7 @@ async function loadBundledDatabase(entry = DEFAULT_LIBRARY_DATABASE, triggerButt
         console.error(error);
         setStatus(`Unable to load ${entry.name}.`, "error");
         hideDatabaseLoading();
-        alert(`${entry.name} could not be loaded. Check your connection or make sure the bundled fallback database is available.`);
+        alert(`${entry.name} could not be loaded. Reinstall NoScope to restore the bundled file, or use Open .emdb to select a local database.`);
         return false;
     } finally {
         hideDatabaseLoading();
@@ -1895,7 +1769,6 @@ async function loadBundledDatabase(entry = DEFAULT_LIBRARY_DATABASE, triggerButt
 }
 
 async function loadDefaultDatabase(triggerButton = btnLoadDefault) {
-    await ensureRemoteManifestLoaded();
     return loadBundledDatabase(getDefaultLibraryDatabaseEntry(), triggerButton);
 }
 
@@ -4431,8 +4304,7 @@ function normalizeRemoteAssetManifest(manifest) {
     return {
         version: typeof manifest.version === "string" ? manifest.version : "",
         baseUrl: typeof manifest.baseUrl === "string" ? manifest.baseUrl : remoteAssetBaseUrl,
-        assets: normalized,
-        databases: normalizeRemoteDatabaseEntries(manifest, typeof manifest.baseUrl === "string" ? manifest.baseUrl : remoteAssetBaseUrl)
+        assets: normalized
     };
 }
 
@@ -4441,7 +4313,6 @@ function applyRemoteAssetManifest(manifest) {
     if (!normalized) return false;
     remoteAssetManifest = normalized.assets;
     remoteAssetBaseUrl = normalized.baseUrl.replace(/\/+$/, "") || remoteAssetBaseUrl;
-    remoteLibraryDatabases = normalized.databases;
     return true;
 }
 

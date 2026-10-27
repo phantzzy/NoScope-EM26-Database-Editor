@@ -17,8 +17,8 @@ The working tree includes compatibility fixes verified against the developer dat
 
 - Open and edit `.emdb` files containing Players, Staff, Teams, Tournaments, and Sponsors.
 - Open unpacked CSV table folders.
-- Load the NoScope default database from the public asset service.
-- Browse and download community databases from the Library panel.
+- Load the developers' bundled `default.emdb` with **Load Default DB**.
+- Open or download the five bundled databases from the Library panel, including offline.
 - Save the edited database back to an `.emdb` file.
 - Export all loaded database tables as CSV files in a ZIP archive.
 - View dynamic loading progress while a database is being opened.
@@ -126,7 +126,7 @@ npm.cmd ci
 npm.cmd start
 ```
 
-The Electron app uses native Open and Save dialogs. By default, Save opens in your `Documents\NoScope` folder. Bring your own `.emdb`, or use the Library while connected to the internet. Databases and the custom image library are hosted separately and are not included in the source checkout.
+The Electron app uses native Open and Save dialogs. By default, Save opens in your `Documents\NoScope` folder. The installer includes the five Library snapshots listed below for offline use. Their binary files remain excluded from the public source checkout; contributors can supply them locally as described in [CONTRIBUTING.md](CONTRIBUTING.md). Custom images are hosted separately.
 
 For the custom Windows installer, also install a .NET SDK that supports `net8.0-windows`. The initial build needs internet access to restore packages from the official NuGet feed configured in `NuGet.Config`.
 
@@ -143,9 +143,9 @@ The result is `release/NoScope-Installer.exe`, with a matching uninstaller. See 
 Choose one of the following:
 
 - **Open .emdb...** selects a database from your computer.
-- **Load Default DB** loads the default database from the public asset service, with a local `data/` fallback when provided.
+- **Load Default DB** loads the developers' bundled `default.emdb`.
 - **Open CSV folder...** loads an unpacked set of supported CSV tables.
-- **Library** shows the remotely hosted NoScope, default EM2026, and community databases.
+- **Library** contains the developers' default, iamgri mod, luccaneta's GLOBAL UPDATED, World Updated, and Updated Stats: T1-2 & Tier 3 Pros (Mid-Season 2026, before PGL).
 
 Database processing happens locally in the app. NoScope does not upload the selected database to a server.
 

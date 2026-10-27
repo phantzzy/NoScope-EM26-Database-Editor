@@ -11,7 +11,7 @@ npm.cmd ci
 npm.cmd start
 ```
 
-No private credentials or developer database are required to start the editor. Supply your own `.emdb` when testing database editing. The Library and shared image downloads use the public asset service; fonts and map tiles also require internet access. The repository does not include the separately hosted databases or custom portrait/logo library.
+No private credentials or developer database are required to start the editor. Supply your own `.emdb` when testing database editing. Installers bundle five Library snapshots for offline use; a source checkout needs these files supplied locally to use the Library. The public repository contains only their catalog metadata, not the database binaries. Shared image downloads, fonts, and map tiles require internet access.
 
 The HTML, CSS, and browser JavaScript are the Electron renderer source. Keep them even though a hosted webpage edition is not currently maintained.
 
@@ -36,13 +36,17 @@ Keep changes focused. Preserve unknown fields, archive entries, existing values,
 
 ## Build on Windows
 
-Install a .NET SDK supporting `net8.0-windows`, then run:
+Install a .NET SDK supporting `net8.0-windows`. Place the five original database snapshots in ignored `data/`, using the exact filenames in [`js/services/library-catalog.js`](js/services/library-catalog.js). Obtain them from the maintainer or a matching installer under `resources/app/data/`. Do not substitute edited copies: the packaging check verifies SHA-256 hashes and the exact file list to avoid bundling unrelated databases.
+
+Then run:
 
 ```powershell
 npm.cmd run dist
 ```
 
 The build restores packages from the official NuGet feed and creates `release/NoScope-Installer.exe`. Build scripts and installer source belong in Git; generated binaries, package caches, signing credentials, and payload archives do not. Distribute binaries through GitHub release assets when publishing a release.
+
+With the snapshots present, run `npm.cmd run check:library` to verify their bytes and `npm.cmd run test:library` to check all five databases offline, including load/save/reopen, Library counts, downloads, and the default selection. To test packaged files, use `npm.cmd run test:library -- release/win-unpacked/resources/app`.
 
 ## Assets and repository contents
 

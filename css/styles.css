@@ -1884,11 +1884,13 @@ body.noscope-desktop .desktop-titlebar {
     gap:18px;
 }
 .library-db-title h3 {
+    overflow-wrap:anywhere;
     color:#fff;
     font-size:1.18rem;
     line-height:1.15;
 }
 .library-db-title p {
+    overflow-wrap:anywhere;
     margin-top:6px;
     color:#c5c7cc;
     font:.72rem var(--font-mono);
