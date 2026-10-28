@@ -287,12 +287,14 @@ Bundled game-related databases and image assets may require separate considerati
 
 ## Roadmap
 
-Planned areas of development include:
+The detailed development direction is maintained in [ROADMAP.md](ROADMAP.md). The immediate focus is stabilization and refinement rather than a large feature expansion:
 
-- Desktop packaging and asset installation improvements.
-- Additional database-schema compatibility checks.
-- Automated tests and release builds.
-- Further modularization of the main browser application.
+- Complete manual and in-game v3 compatibility testing.
+- Improve responsiveness, progress feedback, accessibility, and error recovery.
+- Reduce repeated database and rendering work.
+- Reduce installer size without removing the offline Library.
+- Improve packaging, automated tests, release builds, and code modularity.
+- Treat new feature concepts as optional until the current editor is stable.
 
 ## Acknowledgements
 
