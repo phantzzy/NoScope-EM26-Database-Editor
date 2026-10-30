@@ -24,6 +24,11 @@ contextBridge.exposeInMainWorld("noscopeDesktop", {
         folder,
         fileName
     }),
+    saveAssetImage: ({ folder, fileName, data }) => ipcRenderer.invoke("asset:save-image", {
+        folder,
+        fileName,
+        data: data instanceof ArrayBuffer ? new Uint8Array(data) : data
+    }),
     cacheRemoteAsset: ({ folder, fileName, url }) => ipcRenderer.invoke("asset:cache-remote-image", {
         folder,
         fileName,

@@ -89,13 +89,25 @@
     editDraft = ['401', 'TestCarCo', 'Test description', 'D', 'Automotive'];
     assert(getAssetDisplayName() === '401', 'Sponsor image display name did not use Num');
     assert(getAssetKey('Sponsors', editDraft) === 'sponsors:num:401', 'Sponsor image key did not use Num');
+    let chosenAssetPayload;
+    const chosenAssetResult = await saveChosenAssetFile(
+        new File([Uint8Array.of(137, 80, 78, 71)], 'orange.png', { type: 'image/png' }),
+        '401',
+        'Sponsors',
+        { saveAssetImage: async payload => {
+            chosenAssetPayload = payload;
+            return { fileName: payload.fileName, filePath: `C:\\CustomAssets\\${payload.folder}\\${payload.fileName}` };
+        } }
+    );
+    assert(chosenAssetPayload.folder === 'Sponsors' && chosenAssetPayload.fileName === '401.png', 'Chosen sponsor image did not target the Sponsors folder with its numeric filename');
+    assert(chosenAssetPayload.data.byteLength === 4 && /Sponsors/.test(chosenAssetResult.filePath), 'Chosen sponsor image bytes or saved path were lost');
     editDraft = ['', '', 'Test description', 'D', 'Automotive'];
     const sponsorImageWarning = showAssetIdentityRequiredAlert('saving');
     assert(!appAlertModal.hidden && appAlertTitle.textContent === 'IMAGE IDENTITY REQUIRED', 'Missing sponsor image identity used a native or incorrect warning');
     assert(/sponsor number or company name/i.test(appAlertMessage.textContent), 'Sponsor image warning did not explain the accepted identity fields');
     closeAppAlert();
     await sponsorImageWarning;
-    check('Sponsor images use Num or CompanyName and missing identity uses the custom NoScope warning');
+    check('Chosen images target CustomAssets, sponsor images use Num or CompanyName, and missing identity uses the custom warning');
     switchTab('Teams'); openEditor(0);
     equal(teamRosterDraft, [5, 4, 3, 2, 1, 0, 6], 'Roster does not follow package order');
     const entries = getTeamRosterEntriesForList(db.tables.Teams, db.tables.Teams.rows[0]);

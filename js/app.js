@@ -342,6 +342,7 @@ const capabilities = {
     desktop: Boolean(desktopBridge),
     nativeFiles: Boolean(desktopBridge?.openEmdb && desktopBridge?.saveEmdb),
     gameAssets: Boolean(desktopBridge?.saveClipboardImage),
+    chosenAssetFiles: Boolean(desktopBridge?.saveAssetImage),
     cloudAssetInstall: Boolean(desktopBridge?.installCloudAssets),
     assetFolders: Boolean(desktopBridge?.openCustomAssetFolder && desktopBridge?.chooseCustomAssetRoot),
     remoteAssetCache: Boolean(desktopBridge?.cacheRemoteAsset),
@@ -4610,9 +4611,13 @@ async function prepareAssetEditor() {
     const titles = { players: "Player image", teams: "Team logo", sponsors: "Sponsor logo", staff: "Staff image", staffs: "Staff image", tournaments: "Tournament logo" };
     document.getElementById("asset-editor-title").textContent = titles[normalizedTable];
     const assetHelp = assetEditor.querySelector(".asset-editor-copy p");
-    const matchingNames = normalizedTable === "players" ? "Internal ID or nickname" : "name or Internal ID";
-    const assetCopy = capabilities.gameAssets
-        ? `Paste an image directly into the game's CustomAssets folder, or choose a browser-only override. Files are matched using ${matchingNames}.`
+    const matchingNames = normalizedTable === "players"
+        ? "Internal ID or nickname"
+        : normalizedTable === "sponsors"
+            ? "Num or CompanyName"
+            : "name or Internal ID";
+    const assetCopy = capabilities.chosenAssetFiles
+        ? `Choose an image to save into the game's CustomAssets folder when this entry is saved, or paste one directly. Files are matched using ${matchingNames}.`
         : `Use the bundled CustomAssets image or choose a local override. Files are matched using ${matchingNames}.`;
     assetHelp.textContent = normalizedTable === "sponsors"
         ? `${assetCopy} Sponsor logos do not appear on in-game shirts; that shirt area will remain blank.`
@@ -4829,6 +4834,25 @@ function makePlayerPngFilename(nickname) {
     return `${cleanAssetFileBaseName(nickname) || "player-image"}.png`;
 }
 
+function isSupportedAssetImage(file) {
+    const supportedTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+    if (supportedTypes.has(String(file?.type || "").toLowerCase())) return true;
+    return /\.(png|jpe?g|webp)$/i.test(String(file?.name || ""));
+}
+
+async function saveChosenAssetFile(file, displayName, folder, bridge = desktopBridge) {
+    if (!bridge?.saveAssetImage) throw new Error("Desktop image saving is unavailable.");
+    const fileName = makePlayerImageFilename(displayName, file);
+    const result = await bridge.saveAssetImage({
+        folder,
+        fileName,
+        data: await file.arrayBuffer()
+    });
+    if (result?.error) throw new Error(result.error);
+    if (!result?.fileName || !result?.filePath) throw new Error("NoScope did not receive a saved image path.");
+    return result;
+}
+
 function setAssetActionStatus(message, tone = "") {
     assetActionStatus.textContent = message;
     assetActionStatus.hidden = !message;
@@ -4874,8 +4898,8 @@ async function downloadEntryImageFromUrl(imageUrl, status) {
         const response = await fetch(imageUrl);
         if (!response.ok) throw new Error(`Image request failed (${response.status})`);
         const blob = await response.blob();
-        if (!blob.type.startsWith("image/")) throw new Error("The URL did not return an image");
         const urlName = new URL(imageUrl).pathname.split("/").pop() || "player-image";
+        if (!isSupportedAssetImage({ type: blob.type, name: urlName })) throw new Error("The URL did not return a PNG, JPEG, or WebP image");
         const image = new File([blob], urlName, { type: blob.type });
         const filename = makePlayerImageFilename(displayName, image);
         pendingAsset = image;
@@ -7973,6 +7997,28 @@ editForm.addEventListener("submit", async event => {
         await showAssetIdentityRequiredAlert("saving");
         return;
     }
+    let savedChosenAsset = null;
+    if (pendingAsset instanceof Blob && capabilities.chosenAssetFiles) {
+        const displayName = getAssetDisplayName();
+        const assetFolder = getCustomAssetFolderForTable(activeTab);
+        btnSubmitEdit.disabled = true;
+        setAssetActionStatus("Saving image to CustomAssets...");
+        try {
+            savedChosenAsset = await saveChosenAssetFile(pendingAsset, displayName, assetFolder);
+            setAssetActionStatus(`Saved to ${savedChosenAsset.filePath}`, "success");
+        } catch (error) {
+            console.error("Unable to save chosen image", error);
+            setAssetActionStatus("Image save failed.", "error");
+            await showAppAlert({
+                context: `${getAssetEntryLabel()} image`,
+                title: "IMAGE SAVE FAILED",
+                message: `NoScope could not save the selected image to CustomAssets. ${error.message}`
+            });
+            return;
+        } finally {
+            btnSubmitEdit.disabled = false;
+        }
+    }
     const previousRow = db.tables[activeTab].rows[editingRowIndex];
     db.tables[activeTab].rows[editingRowIndex] = [...editDraft];
     if (activeTab.toLowerCase() === "players") updatePlayerRosterReferences(db.tables[activeTab], previousRow, editDraft);
@@ -7983,7 +8029,22 @@ editForm.addEventListener("submit", async event => {
     if (activeTab.toLowerCase() === "teams") applyTeamRosterDraft(previousRow);
     if (nextAssetKey) {
         if (pendingAsset instanceof Blob) {
-            await AssetDB.put(nextAssetKey, pendingAsset);
+            if (savedChosenAsset) {
+                await AssetDB.remove(nextAssetKey).catch(error => console.error("Unable to clear browser image override", error));
+                if (currentAssetKey && currentAssetKey !== nextAssetKey) {
+                    await AssetDB.remove(currentAssetKey).catch(error => console.error("Unable to clear previous browser image override", error));
+                }
+                const runtimeFolder = savedChosenAsset.folder || getCustomAssetFolderForTable(activeTab);
+                rememberRuntimeAsset(
+                    runtimeFolder,
+                    getAssetDisplayName(),
+                    savedChosenAsset.fileName,
+                    savedChosenAsset.assetPath || `assets/custom/${runtimeFolder}/${encodeURIComponent(savedChosenAsset.fileName)}`
+                );
+                currentAssetKey = nextAssetKey;
+            } else {
+                await AssetDB.put(nextAssetKey, pendingAsset);
+            }
         } else if (pendingAsset === null) {
             await AssetDB.remove(currentAssetKey || nextAssetKey);
         } else if (currentAssetKey && currentAssetKey !== nextAssetKey) {
@@ -8015,7 +8076,7 @@ editForm.addEventListener("submit", async event => {
 assetFileInput.addEventListener("change", async () => {
     const file = assetFileInput.files[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!isSupportedAssetImage(file)) {
         await showAppAlert({
             context: `${getAssetEntryLabel()} image`,
             title: "UNSUPPORTED IMAGE",

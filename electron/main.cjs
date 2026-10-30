@@ -5,6 +5,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { normalizeVersion, compareVersions } = require("./version.cjs");
+const { writeSelectedAssetImage } = require("./asset-files.cjs");
 
 const APP_SCHEME = "noscope";
 const REMOTE_ASSET_MANIFEST_URL = "https://noscope-assets.pages.dev/manifest.json";
@@ -487,6 +488,28 @@ ipcMain.handle("asset:save-clipboard-image", async (_event, payload) => {
             folder: internalFolder,
             assetPath: `assets/custom/${internalFolder}/${encodeURIComponent(fileName)}`,
             data: png
+        };
+    } catch (error) {
+        return { error: toErrorMessage(error) };
+    }
+});
+
+ipcMain.handle("asset:save-image", async (_event, payload) => {
+    try {
+        const folder = normalizeCustomAssetFolder(payload?.folder);
+        const assetFolder = getCustomAssetFolder(folder);
+        const { fileName, filePath } = await writeSelectedAssetImage({
+            folderPath: assetFolder,
+            fileName: payload?.fileName,
+            data: payload?.data
+        });
+        return {
+            fileName,
+            filePath,
+            rootPath: getCustomAssetRoot(),
+            folderPath: assetFolder,
+            folder,
+            assetPath: `assets/custom/${folder}/${encodeURIComponent(fileName)}`
         };
     } catch (error) {
         return { error: toErrorMessage(error) };
