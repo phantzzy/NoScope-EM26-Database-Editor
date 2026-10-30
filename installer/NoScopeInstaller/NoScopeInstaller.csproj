@@ -8,7 +8,7 @@
     <AssemblyName>NoScope-Installer</AssemblyName>
     <RootNamespace>NoScopeInstaller</RootNamespace>
     <ApplicationIcon>..\..\build\icon.ico</ApplicationIcon>
-    <Version>3.0.0-beta.1</Version>
+    <Version>3.0.0-beta.2</Version>
   </PropertyGroup>
 
   <ItemGroup>

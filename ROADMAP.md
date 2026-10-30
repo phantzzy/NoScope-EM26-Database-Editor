@@ -1,6 +1,6 @@
 # NoScope Development Roadmap
 
-This roadmap describes the intended direction for NoScope after v3.0.0 Beta 1. The immediate goal is not to add a large collection of new features. The priority is to make the existing editor smaller, faster, clearer, safer, and easier to maintain.
+This roadmap describes the intended direction for NoScope after v3.0.0 Beta 2. The immediate goal is not to add a large collection of new features. The priority is to make the existing editor smaller, faster, clearer, safer, and easier to maintain.
 
 The roadmap is directional rather than a promise of dates. Priorities may change when Esports Manager updates its database format or testing reveals a more important compatibility problem.
 
@@ -17,7 +17,7 @@ The roadmap is directional rather than a promise of dates. Priorities may change
 
 ## Current baseline
 
-The following measurements were taken from the v3.0.0 Beta 1 Windows build on 28 October 2026:
+The following measurements were taken from the v3.0.0 Beta 2 Windows build in October 2026:
 
 | Item | Approximate size |
 | --- | ---: |

@@ -4,7 +4,7 @@ This document lists NoScope's current capabilities and the major features introd
 
 ## Current product status
 
-- Current app version: **v3.0.0-beta.1**.
+- Current app version: **v3.0.0-beta.2**.
 - Current supported game version: **Esports Manager 2026 v1.1.4**.
 - Platform: Windows desktop application built with Electron.
 - Database format: encrypted Esports Manager `.emdb` packages containing CSV tables and roster metadata.
@@ -314,6 +314,7 @@ This document lists NoScope's current capabilities and the major features introd
 - Open Guide screenshots at full size.
 - Explain database loading, saving, browsing, sorting, editing, Potential, birthdays, badges, rosters, comparison, Mass Edit, Merge, validation, assets, and themes.
 - Include an in-app App Changelog archive with expandable release notes.
+- Open the current release notes as What's New after each app update, with a version-specific option to suppress repeat popups until the next update.
 - Hide webpage changelogs because a hosted webpage edition is not currently maintained.
 - Link to the Esports Manager 2026 Steam page.
 - Link to the public NoScope GitHub repository.
@@ -481,7 +482,7 @@ The desktop updater and restored-merge release introduced:
 - App and Webpage changelog tabs, of which only the App changelog remains relevant now.
 - Image-aware database-loading completion and neutral image placeholders.
 
-### v3.0.0 Beta 1 — October 2026 to present
+### v3.0.0 Beta 2 — October 2026 to present
 
 The compatibility, offline Library, roster, and merge-safety update includes:
 
@@ -508,6 +509,7 @@ The compatibility, offline Library, roster, and merge-safety update includes:
 - A smaller, cleaner theme icon.
 - Removal of obsolete welcome copy such as “Let's get editing!” while retaining the v3 welcome-back release introduction.
 - Expanded package, Electron, Library, and compatibility regression tests.
+- A version-aware What's New popup with the current release expanded and a per-version dismissal preference.
 
 #### v3 merge-safety and performance additions
 
@@ -557,4 +559,4 @@ This catalogue consolidates the current README, built-in app behavior, compatibi
 - `v2.1.1 Hotfix` — 24 July 2026.
 - `v2.2.0` — 25 July 2026.
 - `v2.3.0 App` — 26 July 2026.
-- `v3.0.0 Beta 1` — October 2026 onward.
+- `v3.0.0 Beta 2` — October 2026 onward.

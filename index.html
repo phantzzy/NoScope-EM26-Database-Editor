@@ -82,7 +82,7 @@
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h10a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3V4a1 1 0 0 1 1-1Zm2 13.25A3 3 0 0 1 9 16h8V6a1 1 0 0 0-1-1H7v11.42c.3-.11.64-.17 1-.17ZM9 18a1 1 0 0 0 0 2h8v-2H9Zm1-10h4v2h-4V8Zm0 3h6v2h-6v-2Z"/></svg></span> Guide
                 </button>
                 <button class="btn btn-secondary" id="btn-changelog" type="button">
-                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm1 4v2h2V7H7Zm4 0v2h6V7h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Z"/></svg></span> Changelog
+                    <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm1 4v2h2V7H7Zm4 0v2h6V7h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Zm-4 4v2h2v-2H7Zm4 0v2h6v-2h-6Z"/></svg></span> What's New
                 </button>
                 <button class="btn btn-secondary" id="btn-library" type="button">
                     <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h12a2 2 0 0 1 2 2v14H7a3 3 0 0 1-3-3V5a1 1 0 0 1 1-1Zm2 12.25A3 3 0 0 1 8 16h9V6H6v10.42c.3-.11.64-.17 1-.17ZM8 18a1 1 0 0 0 0 2h11v-2H8Zm1-9h5v2H9V9Zm0 3h7v2H9v-2Z"/></svg></span> Library
@@ -579,13 +579,17 @@
         <div class="modal-backdrop changelog-modal-backdrop" id="changelog-modal" hidden>
             <section class="changelog-modal" role="dialog" aria-modal="true" aria-labelledby="changelog-modal-title">
                 <header class="modal-header">
-                    <div><span class="eyebrow">NoScope changelog</span><h2 id="changelog-modal-title">RELEASE ARCHIVE</h2></div>
+                    <div><span class="eyebrow" id="changelog-modal-context">NoScope changelog</span><h2 id="changelog-modal-title">RELEASE ARCHIVE</h2></div>
                     <button class="icon-button" id="btn-close-changelog" type="button" aria-label="Close changelog">&times;</button>
                 </header>
                 <div class="changelog-modal-content" id="changelog-modal-content" aria-live="polite">
                     <div class="changelog-loading">Loading changelog...</div>
                 </div>
                 <footer class="changelog-modal-actions">
+                    <label class="changelog-dismiss-option" id="changelog-dismiss-option" hidden>
+                        <input id="changelog-dismiss-version" type="checkbox">
+                        <span>Don't show this again until the next NoScope update.</span>
+                    </label>
                     <button class="btn btn-secondary" id="btn-close-changelog-footer" type="button">Close</button>
                 </footer>
             </section>

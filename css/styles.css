@@ -2079,7 +2079,10 @@ body.noscope-desktop .desktop-titlebar {
 .changelog-empty p { max-width:420px; margin:0; color:#8f98a5; font:.72rem var(--font-sans); line-height:1.55; }
 .changelog-release-loading { min-height:120px; margin-top:20px; }
 .changelog-release-error { display:flex; min-height:120px; align-items:center; justify-content:center; gap:16px; color:#ff8b94; font:.72rem var(--font-mono); }
-.changelog-modal-actions { display:flex; justify-content:flex-end; padding:15px 24px; border-top:1px solid #2d3138; background:#14161a; }
+.changelog-modal-actions { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:15px 24px; border-top:1px solid #2d3138; background:#14161a; }
+.changelog-dismiss-option { display:flex; min-width:0; align-items:center; gap:10px; color:#aeb6c1; font-size:.72rem; line-height:1.4; cursor:pointer; }
+.changelog-dismiss-option[hidden] { display:none; }
+.changelog-dismiss-option input { width:17px; height:17px; flex:0 0 auto; accent-color:var(--accent); cursor:pointer; }
 @media(max-width:760px){
     .changelog-modal-backdrop{padding:8px}
     .changelog-modal{width:100%;max-height:calc(100vh - 16px)}
@@ -2090,6 +2093,8 @@ body.noscope-desktop .desktop-titlebar {
     .changelog-release-meta{align-self:center}
     .changelog-release-meta time{display:none}
     .changelog-release-body{padding:2px 14px 22px}
+    .changelog-modal-actions{align-items:stretch;flex-direction:column}
+    .changelog-modal-actions .btn{align-self:flex-end}
 }
 .update-modal-backdrop { z-index:151; padding:20px; }
 .update-modal {

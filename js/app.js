@@ -448,9 +448,13 @@ const btnCloseGuide = document.getElementById("btn-close-guide");
 const btnCloseGuideFooter = document.getElementById("btn-close-guide-footer");
 const btnChangelog = document.getElementById("btn-changelog");
 const changelogModal = document.getElementById("changelog-modal");
+const changelogModalContext = document.getElementById("changelog-modal-context");
+const changelogModalTitle = document.getElementById("changelog-modal-title");
 const changelogModalContent = document.getElementById("changelog-modal-content");
 const btnCloseChangelog = document.getElementById("btn-close-changelog");
 const btnCloseChangelogFooter = document.getElementById("btn-close-changelog-footer");
+const changelogDismissOption = document.getElementById("changelog-dismiss-option");
+const changelogDismissVersion = document.getElementById("changelog-dismiss-version");
 const changelogReleaseCache = new Map();
 const btnUpdate = document.getElementById("btn-update");
 const updateModal = document.getElementById("update-modal");
@@ -516,6 +520,9 @@ const APP_CHANGELOG = {
     emptyTitle: "No app changelogs yet.",
     emptyMessage: "App release notes will appear here once they are added."
 };
+const WHATS_NEW_VERSION = "3.0.0-beta.2";
+const WHATS_NEW_DISMISSED_VERSION_KEY = "noscope-whats-new-dismissed-version";
+let changelogOpenedAsWhatsNew = false;
 
 function updateUpdateButtonVisibility() {
     if (!btnUpdate) return;
@@ -1138,7 +1145,7 @@ function createChangelogRelease(release) {
     return details;
 }
 
-function renderChangelogArchive(releases, config = APP_CHANGELOG) {
+function renderChangelogArchive(releases, config = APP_CHANGELOG, options = {}) {
     const fragment = document.createDocumentFragment();
     const overview = document.createElement("div");
     overview.className = "changelog-archive-overview";
@@ -1151,7 +1158,14 @@ function renderChangelogArchive(releases, config = APP_CHANGELOG) {
 
     const list = document.createElement("div");
     list.className = "changelog-release-list";
-    releases.forEach(release => list.appendChild(createChangelogRelease(release)));
+    releases.forEach(release => {
+        const releaseElement = createChangelogRelease(release);
+        list.appendChild(releaseElement);
+        if (options.openCurrent && release.current) {
+            releaseElement.open = true;
+            loadChangelogRelease(release, releaseElement.querySelector(".changelog-release-body"));
+        }
+    });
     fragment.appendChild(list);
     changelogModalContent.replaceChildren(fragment);
 }
@@ -1181,7 +1195,7 @@ function renderChangelogError() {
     changelogModalContent.replaceChildren(error);
 }
 
-async function renderChangelogPanel() {
+async function renderChangelogPanel(options = {}) {
     const config = APP_CHANGELOG;
     changelogModalContent.setAttribute("aria-busy", "true");
     changelogModalContent.innerHTML = `<div class="changelog-loading">${config.loading}</div>`;
@@ -1202,7 +1216,7 @@ async function renderChangelogPanel() {
             renderChangelogEmpty(config);
             return;
         }
-        renderChangelogArchive(validReleases, config);
+        renderChangelogArchive(validReleases, config, options);
     } catch (error) {
         console.error(error);
         renderChangelogError();
@@ -1211,18 +1225,42 @@ async function renderChangelogPanel() {
     }
 }
 
-function openChangelogPanel() {
+function openChangelogPanel(options = {}) {
+    const whatsNew = options.whatsNew === true;
+    changelogOpenedAsWhatsNew = whatsNew;
+    changelogModalContext.textContent = whatsNew ? "NoScope update" : "NoScope changelog";
+    changelogModalTitle.textContent = whatsNew ? "WHAT'S NEW" : "RELEASE ARCHIVE";
+    changelogDismissOption.hidden = !whatsNew;
+    changelogDismissVersion.checked = false;
     changelogModal.hidden = false;
     btnCloseChangelog.focus();
-    renderChangelogPanel();
+    renderChangelogPanel({ openCurrent: whatsNew });
 }
 
 function closeChangelogPanel() {
+    if (changelogOpenedAsWhatsNew && changelogDismissVersion.checked) {
+        try {
+            localStorage.setItem(WHATS_NEW_DISMISSED_VERSION_KEY, WHATS_NEW_VERSION);
+        } catch (error) {
+            console.warn("Unable to remember the What's New preference", error);
+        }
+    }
+    changelogOpenedAsWhatsNew = false;
     changelogModal.hidden = true;
     btnChangelog.focus();
 }
 
-btnChangelog.addEventListener("click", openChangelogPanel);
+function maybeOpenWhatsNewOnStartup() {
+    try {
+        if (localStorage.getItem(WHATS_NEW_DISMISSED_VERSION_KEY) === WHATS_NEW_VERSION) return false;
+    } catch (error) {
+        console.warn("Unable to read the What's New preference", error);
+    }
+    openChangelogPanel({ whatsNew: true });
+    return true;
+}
+
+btnChangelog.addEventListener("click", () => openChangelogPanel());
 btnCloseChangelog.addEventListener("click", closeChangelogPanel);
 btnCloseChangelogFooter.addEventListener("click", closeChangelogPanel);
 changelogModal.addEventListener("click", event => {
@@ -8334,3 +8372,4 @@ btnExportCsvs.addEventListener("click", async () => {
 });
 
 loadRemoteAssetManifest();
+maybeOpenWhatsNewOnStartup();

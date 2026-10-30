@@ -1,9 +1,9 @@
 [
   {
     "id": "v3.0.0-app",
-    "title": "NoScope v3.0.0 Beta 1 App",
-    "version": "v3.0.0-beta.1",
-    "date": "2026-10-27",
+    "title": "NoScope v3.0.0 Beta 2 App",
+    "version": "v3.0.0-beta.2",
+    "date": "2026-10-30",
     "file": "changelogs/2026-10-27-v3.0.0-app.md",
     "current": true
   },

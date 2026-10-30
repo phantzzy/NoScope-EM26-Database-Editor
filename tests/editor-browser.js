@@ -8,6 +8,21 @@
     const alerts = [];
     window.alert = message => alerts.push(message);
 
+    if (!changelogModal.hidden) closeChangelogPanel();
+    localStorage.removeItem(WHATS_NEW_DISMISSED_VERSION_KEY);
+    assert(maybeOpenWhatsNewOnStartup(), 'What\'s New did not open for an unseen app version');
+    assert(!changelogModal.hidden && changelogModalTitle.textContent === "WHAT'S NEW", 'Startup release notes did not use the What\'s New presentation');
+    assert(!changelogDismissOption.hidden && !changelogDismissVersion.checked, 'Version dismissal checkbox was not available in What\'s New');
+    await renderChangelogPanel({ openCurrent: true });
+    const currentRelease = [...changelogModalContent.querySelectorAll('.changelog-release')].find(release => release.querySelector('.changelog-release-badge.current'));
+    assert(currentRelease?.open && /beta\.2/i.test(currentRelease.textContent), 'Current Beta 2 release notes were not expanded automatically');
+    changelogDismissVersion.checked = true;
+    closeChangelogPanel();
+    assert(localStorage.getItem(WHATS_NEW_DISMISSED_VERSION_KEY) === WHATS_NEW_VERSION, 'What\'s New dismissal was not stored for the current version');
+    assert(!maybeOpenWhatsNewOnStartup() && changelogModal.hidden, 'Dismissed What\'s New reopened for the same version');
+    localStorage.removeItem(WHATS_NEW_DISMISSED_VERSION_KEY);
+    check('What\'s New opens the current Beta 2 changelog once per version and respects the version-specific dismissal checkbox');
+
     if (globalThis.testSourceBase64) {
         const bytes = Uint8Array.from(atob(testSourceBase64), char => char.charCodeAt(0));
         const source = await new JSZip().loadAsync(await decryptEMDB(bytes));
@@ -46,9 +61,14 @@
         const sourcePlayers = db.tables.Players;
         const reportedDuplicateIds = new Set(['torzii', 'spixen', 'xerotn', 'xillex']);
         const reportedDuplicateRows = sourcePlayers.rows.filter(row => reportedDuplicateIds.has(getMergeInternalId(sourcePlayers, row).toLowerCase()));
-        if (reportedDuplicateRows.length === reportedDuplicateIds.size) {
-            const originalRows = sourcePlayers.rows;
-            sourcePlayers.rows = originalRows.filter(row => !reportedDuplicateIds.has(getMergeInternalId(sourcePlayers, row).toLowerCase()));
+        const originalRows = sourcePlayers.rows;
+        const rowsWithoutReportedIds = originalRows.filter(row => !reportedDuplicateIds.has(getMergeInternalId(sourcePlayers, row).toLowerCase()));
+        const alternateIdentityIndex = buildMergeKeyIndex('Players', { header: sourcePlayers.header, rows: rowsWithoutReportedIds }, getMergeStrongFallbackKeys);
+        const reportedDuplicatesArePresent = reportedDuplicateRows.every(row =>
+            collectMergeCandidates(getMergeStrongFallbackKeys('Players', sourcePlayers, row), alternateIdentityIndex).length > 0
+        );
+        if (reportedDuplicateRows.length === reportedDuplicateIds.size && reportedDuplicatesArePresent) {
+            sourcePlayers.rows = rowsWithoutReportedIds;
             mergeState = createEmptyMergeState();
             mergeState.incomingDb = {
                 tables: {
