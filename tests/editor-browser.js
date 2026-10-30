@@ -101,13 +101,28 @@
     );
     assert(chosenAssetPayload.folder === 'Sponsors' && chosenAssetPayload.fileName === '401.png', 'Chosen sponsor image did not target the Sponsors folder with its numeric filename');
     assert(chosenAssetPayload.data.byteLength === 4 && /Sponsors/.test(chosenAssetResult.filePath), 'Chosen sponsor image bytes or saved path were lost');
+    const imageNameCases = [
+        ['Players', [...db.tables.Players.rows[0]], 'p0', 'p0.png'],
+        ['Teams', [...db.tables.Teams.rows[0]], 'Alpha Team', 'Alpha Team.png'],
+        ['Staff', ['coachNick', 'Coach', 'Person', 'Coach', 'Latvia', 'Alpha', 'coach-id', '10', '10'], 'coach-id', 'coach-id.png'],
+        ['Sponsors', ['401', 'TestCarCo', 'Test description', 'D', 'Automotive'], '401', '401.png'],
+        ['Tournaments', [...db.tables.Tournaments.rows[0]], 'Test cup', 'Test cup.png']
+    ];
+    imageNameCases.forEach(([tableName, row, expectedIdentity, expectedFileName]) => {
+        activeTab = tableName;
+        editDraft = row;
+        const identity = getAssetDisplayName();
+        assert(identity === expectedIdentity, `${tableName} image identity used ${identity} instead of ${expectedIdentity}`);
+        assert(makePlayerImageFilename(identity, new File([Uint8Array.of(1)], 'source.png', { type: 'image/png' })) === expectedFileName, `${tableName} image filename syntax was incorrect`);
+    });
+    activeTab = 'Sponsors';
     editDraft = ['', '', 'Test description', 'D', 'Automotive'];
     const sponsorImageWarning = showAssetIdentityRequiredAlert('saving');
     assert(!appAlertModal.hidden && appAlertTitle.textContent === 'IMAGE IDENTITY REQUIRED', 'Missing sponsor image identity used a native or incorrect warning');
     assert(/sponsor number or company name/i.test(appAlertMessage.textContent), 'Sponsor image warning did not explain the accepted identity fields');
     closeAppAlert();
     await sponsorImageWarning;
-    check('Chosen images target CustomAssets, sponsor images use Num or CompanyName, and missing identity uses the custom warning');
+    check('Chosen images use the correct folder and filename syntax for every category, and missing identity uses the custom warning');
     switchTab('Teams'); openEditor(0);
     equal(teamRosterDraft, [5, 4, 3, 2, 1, 0, 6], 'Roster does not follow package order');
     const entries = getTeamRosterEntriesForList(db.tables.Teams, db.tables.Teams.rows[0]);

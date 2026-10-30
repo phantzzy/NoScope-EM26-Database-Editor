@@ -4799,7 +4799,9 @@ function getAssetDisplayName() {
         ? ["internalid", "playerid", "id", "nickname", "nick", "name"]
         : normalizedTable === "sponsors"
             ? ["num", "id", "sponsorid", "internalid", "companyname", "sponsorname", "name", "brand", "title"]
-            : ["name", "companyname", "tournamentname", "nickname", "nick", "title", "internalid", "id"];
+            : ["staff", "staffs"].includes(normalizedTable)
+                ? ["internalid", "staffid", "id", "nickname", "nick", "name", "firstname", "forename"]
+                : ["name", "companyname", "tournamentname", "nickname", "nick", "title", "internalid", "id"];
     for (const preferred of preferredNames) {
         const index = table.header.findIndex(label => normalizeFieldName(label) === preferred);
         if (index >= 0 && String(editDraft[index] || "").trim()) return String(editDraft[index]).trim();
