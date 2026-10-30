@@ -153,7 +153,26 @@
     assert(editDraft[2] === 'FutureTier', 'Unknown tier silently replaced');
     closeEditor();
     assert(!validateCurrentDatabase().issues.some(issue => issue.tableName === 'Tournaments' && ['Country', 'City'].includes(issue.fieldLabel)), 'Optional tournament location flagged as missing');
-    check('Tournament tiers 3/4 and unfamiliar enum values are preserved; blank location remains valid');
+    const tournamentRows = db.tables.Tournaments.rows;
+    const originalTournamentRows = tournamentRows.map(row => [...row]);
+    while (tournamentRows.length < MAX_SUPPORTED_TOURNAMENTS) tournamentRows.push([...tournamentRows[0]]);
+    activeTab = 'Tournaments';
+    const canAddTournament = canAddEntryForActiveTable();
+    assert(!canAddTournament, 'Tournament 52 was not blocked by the editor');
+    assert(!appAlertModal.hidden && appAlertTitle.textContent === 'TOURNAMENT LIMIT REACHED', 'Tournament limit did not use the custom visual warning');
+    assert(/not possible to have more than 51 tournaments/i.test(appAlertMessage.textContent) && /apologize/i.test(appAlertMessage.textContent), 'Tournament limit warning did not explain the limit and apologize');
+    closeAppAlert();
+    tournamentRows.push([...tournamentRows[0]]);
+    const overLimitValidation = validateCurrentDatabase();
+    const tournamentLimitWarning = overLimitValidation.warningIssues.find(issue => issue.type === 'limit-warning');
+    assert(tournamentLimitWarning?.totalCount === 52 && overLimitValidation.hasIssues, 'Validator did not report a 52-tournament database as a warning');
+    assert(getValidatorIssueCategory(tournamentLimitWarning) === 'warnings', 'Tournament limit finding was not categorized as a warning');
+    const overLimitSaveReview = showValidatorReview(overLimitValidation, 'save');
+    assert(!validatorModal.hidden && !btnSaveAnyway.hidden, 'Over-limit tournament database did not require visible save confirmation');
+    closeValidatorReview(true);
+    assert(await overLimitSaveReview, 'Over-limit tournament save confirmation did not allow saving anyway');
+    db.tables.Tournaments.rows = originalTournamentRows;
+    check('Tournament tiers 3/4 and unfamiliar enum values are preserved; blank location remains valid; tournament 52 is blocked with a custom warning and imported over-limit databases require save confirmation');
 
     switchTab('Players'); openEditor(0);
     const roleControl = createRoleField('Role2', 11);

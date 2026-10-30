@@ -1338,7 +1338,7 @@ body.noscope-desktop .desktop-titlebar {
     top:0;
     z-index:5;
     display:grid;
-    grid-template-columns:repeat(4,minmax(0,1fr));
+    grid-template-columns:repeat(5,minmax(0,1fr));
     margin-bottom:0;
     border:1px solid #343840;
     background:#111317;
@@ -1376,6 +1376,9 @@ body.noscope-desktop .desktop-titlebar {
 }
 .validator-summary .is-invalid strong {
     color:#ff6b75;
+}
+.validator-summary .is-warning strong {
+    color:#f4c95d;
 }
 .validator-results {
     display:grid;
@@ -1512,6 +1515,10 @@ body.noscope-desktop .desktop-titlebar {
 .validator-issue-invalid-reference .validator-issue-badge {
     border-color:rgba(255,75,88,.52);
     color:#ff6b75;
+}
+.validator-issue-limit-warning .validator-issue-badge {
+    border-color:rgba(244,201,93,.52);
+    color:#f4c95d;
 }
 .validator-issue > div > strong {
     display:block;

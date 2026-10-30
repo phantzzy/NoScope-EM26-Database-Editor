@@ -7312,9 +7312,22 @@ function closeEditor(cancelled = false) {
     }
 }
 
+function canAddEntryForActiveTable() {
+    if (activeTab?.toLowerCase() !== "tournaments") return true;
+    const tournamentCount = db.tables[activeTab]?.rows?.length || 0;
+    if (tournamentCount < MAX_SUPPORTED_TOURNAMENTS) return true;
+    void showAppAlert({
+        context: "Tournament limit",
+        title: "TOURNAMENT LIMIT REACHED",
+        message: `By default, it is not possible to have more than ${MAX_SUPPORTED_TOURNAMENTS} tournaments. NoScope cannot add another tournament through the editor. We apologize for the inconvenience.`
+    });
+    return false;
+}
+
 // Toolbar actions
 btnAddRow.addEventListener("click", () => {
     if (!activeTab) return;
+    if (!canAddEntryForActiveTable()) return;
     const cols = db.tables[activeTab].header.length;
     const newRow = new Array(cols).fill("");
     dirtyBeforeNewRow = hasUnsavedChanges;

@@ -80,6 +80,7 @@ const DATABASE_VALIDATION_RULES = {
     }
 };
 
+const MAX_SUPPORTED_TOURNAMENTS = 51;
 const VALIDATOR_ENTRY_SAMPLE_LIMIT = 14;
 const btnValidateDatabase = document.getElementById("btn-validate-database");
 const validatorModal = document.getElementById("validator-modal");
@@ -390,6 +391,22 @@ function collectTournamentLocationValidationIssues(tableName, table, rules) {
     return entries.length ? [{ type: "invalid-value", tableName, fieldLabel: "Location", count: entries.length, entries }] : [];
 }
 
+function collectTournamentLimitValidationIssues(tableName, table) {
+    const tournamentCount = table.rows.length;
+    if (tournamentCount <= MAX_SUPPORTED_TOURNAMENTS) return [];
+    const excessCount = tournamentCount - MAX_SUPPORTED_TOURNAMENTS;
+    return [{
+        type: "limit-warning",
+        tableName,
+        fieldLabel: "Tournament limit",
+        count: excessCount,
+        totalCount: tournamentCount,
+        entries: [],
+        message: `This database contains ${tournamentCount} tournaments, which is ${excessCount} over the game's default limit of ${MAX_SUPPORTED_TOURNAMENTS}.`,
+        note: "The game may not handle more than 51 tournaments correctly. You may still save after confirming that you want to keep this unsupported tournament count."
+    }];
+}
+
 function validateCurrentDatabase() {
     const issues = [];
     Object.entries(DATABASE_VALIDATION_RULES).forEach(([requestedName, rules]) => {
@@ -410,18 +427,23 @@ function validateCurrentDatabase() {
         issues.push(...collectMissingValidationIssues(tableName, table, rules));
         if (requestedName === "Teams") issues.push(...collectInvalidTeamMapValidationIssues(tableName, table, rules));
         if (requestedName === "Players") issues.push(...collectMissingPlayerTeamValidationIssues(tableName, table, rules));
-        if (requestedName === "Tournaments") issues.push(...collectTournamentLocationValidationIssues(tableName, table, rules));
+        if (requestedName === "Tournaments") {
+            issues.push(...collectTournamentLocationValidationIssues(tableName, table, rules));
+            issues.push(...collectTournamentLimitValidationIssues(tableName, table));
+        }
     });
     issues.push(...collectRosterReferenceValidationIssues());
     issues.push(...collectPlayerStaffDuplicateValidationIssues());
     const duplicateIssues = issues.filter(issue => issue.type === "duplicate");
     const missingIssues = issues.filter(issue => ["missing-column", "missing-table", "missing-value"].includes(issue.type));
     const invalidIssues = issues.filter(issue => ["invalid-value", "invalid-reference"].includes(issue.type));
+    const warningIssues = issues.filter(issue => issue.type === "limit-warning");
     return {
         issues,
         duplicateIssues,
         missingIssues,
         invalidIssues,
+        warningIssues,
         duplicateEntryCount: duplicateIssues.reduce((total, issue) => total + issue.count, 0),
         missingValueCount: missingIssues.reduce((total, issue) => total + issue.count, 0),
         invalidValueCount: invalidIssues.reduce((total, issue) => total + issue.count, 0),
@@ -464,6 +486,7 @@ function getValidatorIssueMessage(issue) {
 function getValidatorIssueCategory(issue) {
     if (issue.type === "duplicate") return "duplicates";
     if (["invalid-value", "invalid-reference"].includes(issue.type)) return "invalid";
+    if (issue.type === "limit-warning") return "warnings";
     return "missing";
 }
 
@@ -648,6 +671,8 @@ function createValidatorIssueRow(issue) {
     badge.className = "validator-issue-badge";
     badge.textContent = issue.type === "duplicate"
         ? "Duplicate"
+        : issue.type === "limit-warning"
+            ? "Warning"
         : ["invalid-value", "invalid-reference"].includes(issue.type)
             ? "Invalid"
             : "Missing";
@@ -705,7 +730,8 @@ function createValidatorToolbar(result, filteredIssues) {
         ["all", "All", result.issues.length],
         ["duplicates", "Duplicates", result.duplicateIssues.length],
         ["missing", "Missing", result.missingIssues.length],
-        ["invalid", "Invalid", result.invalidIssues.length]
+        ["invalid", "Invalid", result.invalidIssues.length],
+        ["warnings", "Warnings", result.warningIssues.length]
     ].forEach(([value, label, count]) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -753,6 +779,7 @@ function renderValidatorResults(result) {
         createValidatorSummaryItem(result.duplicateIssues.length, "duplicate groups", "is-duplicate"),
         createValidatorSummaryItem(result.missingValueCount, "missing values", "is-missing"),
         createValidatorSummaryItem(result.invalidValueCount, "invalid values", "is-invalid"),
+        createValidatorSummaryItem(result.warningIssues.length, "warnings", "is-warning"),
         createValidatorSummaryItem(result.affectedTables, "tables affected")
     );
     validatorResults.innerHTML = "";
