@@ -559,4 +559,5 @@ This catalogue consolidates the current README, built-in app behavior, compatibi
 - `v2.1.1 Hotfix` — 24 July 2026.
 - `v2.2.0` — 25 July 2026.
 - `v2.3.0 App` — 26 July 2026.
-- `v3.0.0 Beta 2` — October 2026 onward.
+- `v3.0.0 Beta 1` — 27 October 2026.
+- `v3.0.0 Beta 2` — 30 October 2026 onward.

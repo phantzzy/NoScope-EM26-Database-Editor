@@ -14,6 +14,8 @@
     assert(!changelogModal.hidden && changelogModalTitle.textContent === "WHAT'S NEW", 'Startup release notes did not use the What\'s New presentation');
     assert(!changelogDismissOption.hidden && !changelogDismissVersion.checked, 'Version dismissal checkbox was not available in What\'s New');
     await renderChangelogPanel({ openCurrent: true });
+    const changelogVersions = [...changelogModalContent.querySelectorAll('.changelog-release-badge')].map(badge => badge.textContent);
+    assert(changelogVersions.includes('v3.0.0-beta.1') && changelogVersions.includes('v3.0.0-beta.2'), 'Beta 1 and Beta 2 were not displayed as separate changelog releases');
     const currentRelease = [...changelogModalContent.querySelectorAll('.changelog-release')].find(release => release.querySelector('.changelog-release-badge.current'));
     assert(currentRelease?.open && /beta\.2/i.test(currentRelease.textContent), 'Current Beta 2 release notes were not expanded automatically');
     changelogDismissVersion.checked = true;
@@ -21,7 +23,7 @@
     assert(localStorage.getItem(WHATS_NEW_DISMISSED_VERSION_KEY) === WHATS_NEW_VERSION, 'What\'s New dismissal was not stored for the current version');
     assert(!maybeOpenWhatsNewOnStartup() && changelogModal.hidden, 'Dismissed What\'s New reopened for the same version');
     localStorage.removeItem(WHATS_NEW_DISMISSED_VERSION_KEY);
-    check('What\'s New opens the current Beta 2 changelog once per version and respects the version-specific dismissal checkbox');
+    check('What\'s New keeps Beta 1 and Beta 2 as separate releases, opens the current Beta 2 notes once per version, and respects the version-specific dismissal checkbox');
 
     if (globalThis.testSourceBase64) {
         const bytes = Uint8Array.from(atob(testSourceBase64), char => char.charCodeAt(0));
