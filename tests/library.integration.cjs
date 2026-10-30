@@ -9,6 +9,7 @@ const appRoot = process.argv[2] ? path.resolve(process.argv[2]) : root;
 protocol.registerSchemesAsPrivileged([{ scheme: 'noscope', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 app.setPath('userData', path.join(root, 'tmp', 'library-test-profile'));
 app.whenReady().then(async () => {
+    await session.defaultSession.clearCache();
     protocol.handle('noscope', request => {
         const file = path.resolve(appRoot, decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, ''));
         if (!file.startsWith(appRoot + path.sep)) throw new Error('Path outside application');
@@ -25,6 +26,7 @@ app.whenReady().then(async () => {
             window.alert = message => { throw new Error(message); };
             const entries = getLibraryDatabaseEntries();
             assert(entries.length === 5, 'Expected exactly five supplied snapshots');
+            entries.forEach(entry => assert(/^\\d{4}-\\d{2}-\\d{2}$/.test(entry.updatedAt), 'Library entry is missing a stable Last updated date: ' + entry.fileName));
             assert(!document.getElementById('btn-load-default'), 'Removed toolbar button remains');
             assert(entries[0].fileName === 'default.emdb', 'Developers database missing from Library');
             applyRemoteAssetManifest({ Players: {}, Databases: [{ fileName: 'old-default.emdb', default: true, url: 'https://example.invalid/old.emdb' }] });
@@ -54,6 +56,9 @@ app.whenReady().then(async () => {
                 assert(download.download === entries[index].fileName, 'Incorrect download filename');
                 assert(decodeURIComponent(new URL(download.href).pathname).endsWith('/data/' + entries[index].fileName), 'Incorrect download path');
                 assert(!card.querySelector('a[href="undefined"]'), 'Invented source link');
+                const updated = card.querySelector('.library-db-updated');
+                assert(updated?.textContent.startsWith('Last updated: '), 'Library card is missing its Last updated label');
+                assert(updated.textContent.includes(formatChangelogDate(entries[index].updatedAt)), 'Library card displays the wrong update date');
             });
             assert(libraryDatabaseList.scrollWidth <= libraryDatabaseList.clientWidth + 1, 'Library overflows horizontally');
             await waitForLoadingPaint();

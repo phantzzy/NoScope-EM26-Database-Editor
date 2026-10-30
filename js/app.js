@@ -864,7 +864,9 @@ function createLibraryDatabaseCard(summary) {
     meta.textContent = `${summary.owner ? `by ${summary.owner} - ` : ""}Bundled database - ${summary.fileName}`;
     const updated = document.createElement("p");
     updated.className = "library-db-updated";
-    updated.textContent = summary.default ? "Default database from the developers." : "Included for offline use.";
+    const dateLabel = formatChangelogDate(summary.updatedAt);
+    const snapshotNote = summary.default ? "Default database from the developers." : "Included for offline use.";
+    updated.textContent = `Last updated: ${dateLabel}. ${snapshotNote}`;
     title.append(name, meta, updated);
     header.appendChild(title);
     const stats = document.createElement("div");

@@ -224,7 +224,7 @@ The desktop Assets panel is temporarily hidden in this beta. Existing record ima
 ### 9. Use the built-in reference panels
 
 - **Guide** provides task-based instructions and screenshots.
-- **Library** provides database downloads and source links.
+- **Library** provides database downloads, source links, record counts, and a visible Last updated date for every snapshot.
 - **What's New** opens automatically after an update, contains expandable app release notes, and can be dismissed until the next version.
 - The Steam button opens the official Esports Manager 2026 page; GitHub opens the NoScope source repository.
 - The theme button switches between dark and light mode.

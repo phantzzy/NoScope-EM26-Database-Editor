@@ -38,6 +38,7 @@ This document lists NoScope's current capabilities and the major features introd
 - Include `World_Updated.emdb`.
 - Include `Updated Stats: T1-2 & Tier 3 Pros (Mid-Season 2026, before PGL)`.
 - Show database information and record counts in the Library.
+- Show an explicit Last updated date for every bundled Library snapshot.
 - Keep Library databases separate from public source control while packaging them into the installer.
 - Protect the offline Library from being silently replaced by cloud asset updates.
 

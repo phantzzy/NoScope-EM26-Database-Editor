@@ -5,7 +5,7 @@
   "description": "NoScope desktop app for editing Esports Manager .emdb databases.",
   "main": "electron/main.cjs",
   "scripts": {
-    "test": "node --test tests/asset-files.test.cjs tests/database-package.test.cjs tests/version.test.cjs",
+    "test": "node --test tests/asset-files.test.cjs tests/database-package.test.cjs tests/library-catalog.test.cjs tests/version.test.cjs",
     "test:editor": "node tests/run-editor-tests.cjs",
     "start": "electron .",
     "build": "npm run build:asset-manifest",
