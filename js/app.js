@@ -4135,9 +4135,49 @@ document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !massEditModal.hidden) closeMassEditModal();
 });
 
+function getAssetIdentityAliases(tableName) {
+    if (String(tableName || "").toLowerCase() === "sponsors") {
+        return ["num", "id", "sponsorid", "internalid", "companyname", "sponsorname", "name", "brand", "title"];
+    }
+    return ["internalid", "playerid", "teamid", "id", "nickname", "nick", "name"];
+}
+
+function getAssetIdentityRequirement(tableName = activeTab) {
+    const requirements = {
+        players: "an Internal ID, ID, or nickname",
+        teams: "a Team ID, ID, nickname, or name",
+        sponsors: "a sponsor number or company name",
+        staff: "a Staff ID, ID, nickname, or name",
+        staffs: "a Staff ID, ID, nickname, or name",
+        tournaments: "a Tournament ID, ID, or name"
+    };
+    return requirements[String(tableName || "").toLowerCase()] || "an ID or name";
+}
+
+function getAssetEntryLabel(tableName = activeTab) {
+    const labels = {
+        players: "Player",
+        teams: "Team",
+        sponsors: "Sponsor",
+        staff: "Staff",
+        staffs: "Staff",
+        tournaments: "Tournament"
+    };
+    return labels[String(tableName || "").toLowerCase()] || "Entry";
+}
+
+function showAssetIdentityRequiredAlert(action = "saving") {
+    return showAppAlert({
+        context: `${getAssetEntryLabel()} image`,
+        title: "IMAGE IDENTITY REQUIRED",
+        message: `Enter ${getAssetIdentityRequirement()} before ${action} an image.`
+    });
+}
+
 function getAssetKey(tableName, row) {
     const table = db.tables[tableName];
-    const preferred = ["internalid", "playerid", "teamid", "id", "nickname", "nick", "name"];
+    if (!table) return null;
+    const preferred = getAssetIdentityAliases(tableName);
     let columnIndex = -1;
     for (const candidate of preferred) {
         columnIndex = table.header.findIndex(label => normalizeFieldName(label) === candidate);
@@ -4818,11 +4858,15 @@ async function downloadEntryImageFromUrl(imageUrl, status) {
     captureVisibleFields();
     const displayName = getAssetDisplayName();
     if (!displayName) {
-        alert("Enter this entry's name before downloading the image.");
+        await showAssetIdentityRequiredAlert("downloading");
         return;
     }
     if (!imageUrl) {
-        alert("Enter a direct image URL first.");
+        await showAppAlert({
+            context: "Image download",
+            title: "IMAGE URL REQUIRED",
+            message: "Enter a direct PNG, JPEG, or WebP image URL before downloading."
+        });
         return;
     }
     try {
@@ -7926,7 +7970,7 @@ editForm.addEventListener("submit", async event => {
     }
     const nextAssetKey = getAssetKey(activeTab, editDraft);
     if (pendingAsset instanceof Blob && !nextAssetKey) {
-        alert("Enter an Internal ID, ID, nickname, or name before saving an image.");
+        await showAssetIdentityRequiredAlert("saving");
         return;
     }
     const previousRow = db.tables[activeTab].rows[editingRowIndex];
@@ -7968,11 +8012,15 @@ editForm.addEventListener("submit", async event => {
         resumeValidatorAfterEditor({ rerun: true });
     }
 });
-assetFileInput.addEventListener("change", () => {
+assetFileInput.addEventListener("change", async () => {
     const file = assetFileInput.files[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-        alert("Please choose a PNG, JPEG, or WebP image.");
+        await showAppAlert({
+            context: `${getAssetEntryLabel()} image`,
+            title: "UNSUPPORTED IMAGE",
+            message: "Choose a PNG, JPEG, or WebP image file."
+        });
         assetFileInput.value = "";
         return;
     }
@@ -7987,11 +8035,7 @@ btnPastePlayerImage.addEventListener("click", async () => {
     const displayName = getAssetDisplayName();
     const assetFolder = getCustomAssetFolderForTable(activeTab);
     if (!displayName) {
-        await showAppAlert({
-            context: "Image paste",
-            title: "NAME REQUIRED",
-            message: "Enter a nickname, Internal ID, ID, or name before pasting an image."
-        });
+        await showAssetIdentityRequiredAlert("pasting");
         return;
     }
     if (!assetFolder) return;

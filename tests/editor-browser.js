@@ -85,6 +85,17 @@
     zip.file('roster_order.json', JSON.stringify({ Alpha: ['p5', 'p4', 'p3', 'p2', 'p1', 'p0', 'p6'], Unrelated: ['unresolved'] }));
     zip.file('future.bin', Uint8Array.of(0, 255, 3));
     assert(await loadEMDBFile(await fileFromZip(zip)), 'Synthetic database failed to load');
+    activeTab = 'Sponsors';
+    editDraft = ['401', 'TestCarCo', 'Test description', 'D', 'Automotive'];
+    assert(getAssetDisplayName() === '401', 'Sponsor image display name did not use Num');
+    assert(getAssetKey('Sponsors', editDraft) === 'sponsors:num:401', 'Sponsor image key did not use Num');
+    editDraft = ['', '', 'Test description', 'D', 'Automotive'];
+    const sponsorImageWarning = showAssetIdentityRequiredAlert('saving');
+    assert(!appAlertModal.hidden && appAlertTitle.textContent === 'IMAGE IDENTITY REQUIRED', 'Missing sponsor image identity used a native or incorrect warning');
+    assert(/sponsor number or company name/i.test(appAlertMessage.textContent), 'Sponsor image warning did not explain the accepted identity fields');
+    closeAppAlert();
+    await sponsorImageWarning;
+    check('Sponsor images use Num or CompanyName and missing identity uses the custom NoScope warning');
     switchTab('Teams'); openEditor(0);
     equal(teamRosterDraft, [5, 4, 3, 2, 1, 0, 6], 'Roster does not follow package order');
     const entries = getTeamRosterEntriesForList(db.tables.Teams, db.tables.Teams.rows[0]);
