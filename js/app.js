@@ -7763,6 +7763,33 @@ function getFilterPickerOptions(field) {
     }).filter(option => option.label);
 }
 
+function positionFilterPickerMenu(search, menu) {
+    const inputRect = search.getBoundingClientRect();
+    const modalRect = filterModal.querySelector(".filter-modal").getBoundingClientRect();
+    const margin = 8;
+    const upperBound = Math.max(margin, modalRect.top + margin);
+    const lowerBound = Math.min(window.innerHeight - margin, modalRect.bottom - margin);
+    const spaceAbove = Math.max(0, inputRect.top - upperBound);
+    const spaceBelow = Math.max(0, lowerBound - inputRect.bottom);
+    const openAbove = spaceAbove > spaceBelow;
+    const availableHeight = openAbove ? spaceAbove : spaceBelow;
+    const menuWidth = inputRect.width;
+    const leftLimit = Math.max(margin, modalRect.left + margin);
+    const rightLimit = Math.min(window.innerWidth - margin, modalRect.right - margin);
+    const left = Math.min(Math.max(inputRect.left, leftLimit), Math.max(leftLimit, rightLimit - menuWidth));
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.width = `${Math.round(menuWidth)}px`;
+    menu.style.maxHeight = `${Math.max(48, Math.min(250, availableHeight - 4))}px`;
+    if (openAbove) {
+        menu.style.top = "auto";
+        menu.style.bottom = `${Math.round(window.innerHeight - inputRect.top + 1)}px`;
+    } else {
+        menu.style.top = `${Math.round(inputRect.bottom - 1)}px`;
+        menu.style.bottom = "auto";
+    }
+    menu.dataset.placement = openAbove ? "above" : "below";
+}
+
 function createFilterSearchPicker(field, savedValue) {
     const options = getFilterPickerOptions(field);
     const picker = document.createElement("div");
@@ -7804,6 +7831,7 @@ function createFilterSearchPicker(field, savedValue) {
             menu.appendChild(button);
         });
         picker.classList.add("open");
+        positionFilterPickerMenu(search, menu);
     };
     search.addEventListener("focus", showOptions);
     search.addEventListener("input", () => { hidden.value = ""; icon.hidden = true; search.classList.remove("has-icon"); showOptions(); });
@@ -7943,6 +7971,7 @@ function renderFilterModal() {
 }
 
 function closeFilterModal() {
+    filterModalContent.querySelectorAll(".filter-searchable-picker.open").forEach(picker => picker.classList.remove("open"));
     filterModal.hidden = true;
 }
 
@@ -7960,6 +7989,12 @@ btnFilter.addEventListener("click", () => {
 btnCloseFilter.addEventListener("click", closeFilterModal);
 btnCancelFilter.addEventListener("click", closeFilterModal);
 filterModal.addEventListener("click", event => { if (event.target === filterModal) closeFilterModal(); });
+filterModalContent.addEventListener("scroll", () => {
+    filterModalContent.querySelectorAll(".filter-searchable-picker.open").forEach(picker => picker.classList.remove("open"));
+});
+window.addEventListener("resize", () => {
+    filterModalContent.querySelectorAll(".filter-searchable-picker.open").forEach(picker => picker.classList.remove("open"));
+});
 btnClearFilters.addEventListener("click", () => {
     filtersByTable[activeTab] = {};
     updateFilterButton();

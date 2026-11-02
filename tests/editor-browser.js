@@ -303,12 +303,32 @@
     clickSelectionRow(0);
     switchTab('Teams');
     assert(!selectedRowIndexes.size, 'Player selection leaked into another table');
+    renderFilterModal();
+    filterModal.hidden = false;
+    const filterDialog = filterModal.querySelector('.filter-modal');
+    filterDialog.style.height = '320px';
+    const teamCountryPicker = filterModalContent.querySelector('.filter-searchable-picker');
+    const teamCountrySearch = teamCountryPicker?.querySelector('input[type="search"]');
+    assert(teamCountrySearch, 'Team Country filter picker is missing');
+    teamCountrySearch.value = 'ru';
+    teamCountrySearch.dispatchEvent(new Event('input', { bubbles: true }));
+    const teamCountryMenu = teamCountryPicker.querySelector('.searchable-picker-menu');
+    const filterModalRect = filterDialog.getBoundingClientRect();
+    const teamCountryMenuRect = teamCountryMenu.getBoundingClientRect();
+    assert(getComputedStyle(teamCountryMenu).position === 'fixed', 'Team Country filter menu is still trapped in the scrolling content');
+    assert(
+        teamCountryMenuRect.top >= filterModalRect.top && teamCountryMenuRect.bottom <= filterModalRect.bottom,
+        `Team Country filter menu overflows the filter modal: menu ${JSON.stringify({ top: teamCountryMenuRect.top, bottom: teamCountryMenuRect.bottom })}, modal ${JSON.stringify({ top: filterModalRect.top, bottom: filterModalRect.bottom })}`
+    );
+    assert([...teamCountryMenu.querySelectorAll('button')].some(button => button.textContent.includes('Russia')), 'Team Country filter results were lost while preventing overflow');
+    filterDialog.style.height = '';
+    closeFilterModal();
     db.tables.Players.rows = selectionOriginalRows;
     gridSortStates.players = selectionOriginalGridSort;
     listSortByTable.Players = selectionOriginalListSort;
     switchTab('Players');
     setViewMode(selectionOriginalView);
-    check('Grid and list selection supports sorted/filtered Shift-click ranges in both directions and across pages; pagination and view changes preserve selection, bulk actions include off-page players, and deselection and table/deletion resets work');
+    check('Grid and list selection supports sorted/filtered Shift-click ranges in both directions and across pages; pagination and view changes preserve selection, bulk actions include off-page players, deselection and table/deletion resets work, and the Team Country filter stays inside its modal');
 
     // Exercise existing feature flows against the current columns.
     selectedRowIndexes.add(1);

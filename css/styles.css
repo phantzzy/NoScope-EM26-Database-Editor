@@ -1026,7 +1026,7 @@ body.noscope-desktop .desktop-titlebar {
 .filter-segmented .filter-icon-button { display:grid; place-items:center; }
 .filter-segmented .filter-icon-button svg { width:18px; height:18px; }
 .filter-searchable-picker > input[type="search"] { height:38px; }
-.filter-searchable-picker .searchable-picker-menu { z-index:50; }
+.filter-searchable-picker .searchable-picker-menu { position:fixed; right:auto; z-index:160; }
 .filter-range { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 .filter-range input { min-width:0; padding-inline:8px; }
 .attribute-filter-range { display:block; }
