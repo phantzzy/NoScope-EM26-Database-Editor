@@ -32,6 +32,7 @@ The working tree includes compatibility fixes verified against the developer dat
 - Global player leaderboard ranks with gold, silver, and bronze placements.
 - Live text search, category filters, and attribute ranges.
 - Pagination with first, previous, next, last, and validated page-jump controls.
+- Shift-click player range selection with selections preserved between pages, sorting, filtering, and grid/list views.
 - Multi-select in card and list views with Deselect all support.
 - Horizontal scrolling for wide list views.
 - Built-in Guide, Library, What's New, Steam, and GitHub links. The Assets tab is temporarily hidden in this beta.

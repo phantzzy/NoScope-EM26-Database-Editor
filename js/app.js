@@ -1998,20 +1998,23 @@ function filterRowsByListView(tableName, entries) {
     return entries.filter(entry => staffRowMatchesListView(table, entry.row, presetKey));
 }
 
-let selectedRowElement = null;
-let selectedRowElements = new Map();
-let selectedRowIndex = -1;
+const selectedRowIndexes = new Set();
+let selectionAnchorIndex = -1;
+let selectionViewIndexes = [];
+let selectionTable = null;
+let selectionRowCount = 0;
 let massEditTargetIndexes = [];
 let rosterPreviewTimer = null;
 let rosterPreview = null;
 
 function renderTable(tableName) {
     const tableData = db.tables[tableName];
+    // Row indexes belong to one table and must not survive deletions or database replacement.
+    if (selectionTable !== tableData || selectionRowCount > (tableData?.rows.length || 0)) clearSelection();
+    selectionTable = tableData;
+    selectionRowCount = tableData?.rows.length || 0;
+    selectionViewIndexes = [];
     tableContainer.innerHTML = "";
-    selectedRowElement = null;
-    selectedRowElements = new Map();
-    selectedRowIndex = -1;
-    updateSelectionActions();
     
     if(!tableData) return;
 
@@ -2021,6 +2024,7 @@ function renderTable(tableName) {
         .filter(entry => rowMatchesFilters(tableName, entry.row, entry.originalIndex, filtersByTable[tableName] || {}));
     const presetRows = viewMode === "list" ? filterRowsByListView(tableName, filteredRows) : filteredRows;
     const viewRows = viewMode === "list" ? sortListEntries(tableName, presetRows) : sortGridEntries(tableName, presetRows);
+    selectionViewIndexes = viewRows.map(entry => entry.originalIndex);
     const pageCount = Math.max(1, Math.ceil(viewRows.length / PAGE_SIZE));
     currentPage = Math.min(Math.max(currentPage, 1), pageCount);
     const pageStart = (currentPage - 1) * PAGE_SIZE;
@@ -2039,6 +2043,7 @@ function renderTable(tableName) {
         content.appendChild(noResults);
     }
     tableContainer.appendChild(content);
+    updateSelectionDisplay();
     renderPagination(viewRows.length);
 }
 
@@ -2699,7 +2704,7 @@ function buildLegacyPlayerListTable(table, entries, tableName) {
         earningsCell.className = "list-money";
         const actionCell = createListActionCell(tr, originalIndex, nick);
         tr.append(rolesCell, ratingCell, earningsCell, actionCell);
-        tr.addEventListener("click", () => selectCard(tr, originalIndex));
+        tr.addEventListener("click", event => selectCard(tr, originalIndex, false, event));
         body.appendChild(tr);
     });
     table.appendChild(body);
@@ -2770,7 +2775,7 @@ function buildPlayerListTable(table, entries, tableName) {
             getPlayerGeneralFields(source).forEach(field => tr.appendChild(createPlayerGeneralCell(tableName, row, field)));
         }
         tr.appendChild(createListActionCell(tr, originalIndex, nick));
-        tr.addEventListener("click", () => selectCard(tr, originalIndex));
+        tr.addEventListener("click", event => selectCard(tr, originalIndex, false, event));
         body.appendChild(tr);
     });
     table.appendChild(body);
@@ -2960,7 +2965,7 @@ function buildTeamListTable(table, entries, tableName) {
         tr.appendChild(createTeamRosterListCell(bench, "No bench"));
         tr.appendChild(createListTextCell(String(roster.length)));
         tr.appendChild(createListActionCell(tr, originalIndex, label));
-        tr.addEventListener("click", () => selectCard(tr, originalIndex));
+        tr.addEventListener("click", event => selectCard(tr, originalIndex, false, event));
         body.appendChild(tr);
     });
     table.appendChild(body);
@@ -2995,7 +3000,7 @@ function buildStaffListTable(table, entries, tableName) {
             tr.appendChild(createListTeamCell(tableName, row, getTableValue(source, row, ["team", "teamname", "teamid"])));
         }
         tr.appendChild(createListActionCell(tr, originalIndex, nickname));
-        tr.addEventListener("click", () => selectCard(tr, originalIndex));
+        tr.addEventListener("click", event => selectCard(tr, originalIndex, false, event));
         body.appendChild(tr);
     });
     table.appendChild(body);
@@ -3065,7 +3070,7 @@ function buildGenericListTable(table, tableName, entries) {
         });
         const title = String(row[fields[0]?.index] ?? `${tableName} ${originalIndex + 1}`);
         tr.appendChild(createListActionCell(tr, originalIndex, title));
-        tr.addEventListener("click", () => selectCard(tr, originalIndex));
+        tr.addEventListener("click", event => selectCard(tr, originalIndex, false, event));
         body.appendChild(tr);
     });
     table.appendChild(body);
@@ -3210,7 +3215,7 @@ function createRowElement(rowData, rIndex) {
         loadCardAsset(media, getAssetKey(activeTab, rowData), getBundledAssetCandidates(activeTab, rowData));
     }
     card.append(cardHeader, details, editButton);
-    card.addEventListener("click", () => selectCard(card, rIndex));
+    card.addEventListener("click", event => selectCard(card, rIndex, false, event));
     return card;
 }
 
@@ -3321,7 +3326,7 @@ function createEntityCard(row, rIndex) {
     } else {
         card.append(...frontItems);
     }
-    card.addEventListener("click", () => selectCard(card, rIndex));
+    card.addEventListener("click", event => selectCard(card, rIndex, false, event));
     return card;
 }
 
@@ -3699,7 +3704,7 @@ function createPlayerCard(row, rIndex) {
     inner.append(front, createTeamRosterCardBack(db.tables[activeTab], row, nickname, rIndex, statNames.map(([, aliases]) => aliases), false));
     card.appendChild(inner);
     enableRosterCardFlip(card);
-    card.addEventListener("click", () => selectCard(card, rIndex));
+    card.addEventListener("click", event => selectCard(card, rIndex, false, event));
     return card;
 }
 
@@ -3819,44 +3824,48 @@ function createMiniRadar(values) {
     return svg;
 }
 
-function selectCard(card, index, forceSelected = false) {
-    if (!forceSelected && selectedRowElements.get(index) === card) {
-        card.classList.remove("selected");
-        selectedRowElements.delete(index);
-        const selections = Array.from(selectedRowElements.entries());
-        const lastSelection = selections.length ? selections[selections.length - 1] : null;
-        selectedRowIndex = lastSelection ? lastSelection[0] : -1;
-        selectedRowElement = lastSelection ? lastSelection[1] : null;
-        updateSelectionActions();
-        return;
+function selectCard(card, index, forceSelected = false, event = null) {
+    const anchorPosition = selectionViewIndexes.indexOf(selectionAnchorIndex);
+    const targetPosition = selectionViewIndexes.indexOf(index);
+    if (!forceSelected && event?.shiftKey && anchorPosition >= 0 && targetPosition >= 0) {
+        const start = Math.min(anchorPosition, targetPosition);
+        const end = Math.max(anchorPosition, targetPosition);
+        selectionViewIndexes.slice(start, end + 1).forEach(rowIndex => selectedRowIndexes.add(rowIndex));
+    } else if (!forceSelected && selectedRowIndexes.has(index)) {
+        selectedRowIndexes.delete(index);
+        if (selectionAnchorIndex === index) selectionAnchorIndex = [...selectedRowIndexes].at(-1) ?? -1;
+    } else {
+        selectedRowIndexes.add(index);
+        selectionAnchorIndex = index;
     }
-    card.classList.add("selected");
-    selectedRowElements.set(index, card);
-    selectedRowElement = card;
-    selectedRowIndex = index;
+    updateSelectionDisplay();
+}
+
+function updateSelectionDisplay() {
+    tableContainer.querySelectorAll(".record-card[data-index], .entry-list-table tr[data-index]").forEach(element => {
+        element.classList.toggle("selected", selectedRowIndexes.has(Number(element.dataset.index)));
+    });
     updateSelectionActions();
 }
 
 function clearSelection() {
-    selectedRowElements.forEach(element => element.classList.remove("selected"));
-    selectedRowElements.clear();
-    selectedRowElement = null;
-    selectedRowIndex = -1;
-    updateSelectionActions();
+    selectedRowIndexes.clear();
+    selectionAnchorIndex = -1;
+    updateSelectionDisplay();
 }
 
 function updateSelectionActions() {
-    btnDeselectAll.hidden = selectedRowElements.size < 2;
+    btnDeselectAll.hidden = selectedRowIndexes.size === 0;
     const canMassEdit = activeTab?.toLowerCase() === "players";
     btnMassEdit.hidden = !canMassEdit;
-    btnMassEdit.disabled = !canMassEdit || selectedRowElements.size < 2;
+    btnMassEdit.disabled = !canMassEdit || selectedRowIndexes.size < 2;
     btnMassEdit.title = btnMassEdit.disabled
         ? "Select at least two players to mass edit"
-        : `Mass edit ${selectedRowElements.size} selected players`;
-    btnCompare.disabled = !canMassEdit || selectedRowElements.size === 0;
+        : `Mass edit ${selectedRowIndexes.size} selected players`;
+    btnCompare.disabled = !canMassEdit || selectedRowIndexes.size === 0;
     btnCompare.title = btnCompare.disabled
         ? "Select at least one player to compare"
-        : `Compare ${selectedRowElements.size} selected player${selectedRowElements.size === 1 ? "" : "s"}`;
+        : `Compare ${selectedRowIndexes.size} selected player${selectedRowIndexes.size === 1 ? "" : "s"}`;
 }
 
 function getMassEditNumericFields(table) {
@@ -4040,9 +4049,9 @@ function renderMassEditModal() {
 }
 
 function openMassEditModal() {
-    if (activeTab?.toLowerCase() !== "players" || selectedRowElements.size < 2) return;
+    if (activeTab?.toLowerCase() !== "players" || selectedRowIndexes.size < 2) return;
     const table = db.tables[activeTab];
-    massEditTargetIndexes = [...selectedRowElements.keys()]
+    massEditTargetIndexes = [...selectedRowIndexes.keys()]
         .filter(index => Number.isInteger(index) && table.rows[index]);
     if (massEditTargetIndexes.length < 2) return;
     const count = massEditTargetIndexes.length;
@@ -7384,9 +7393,7 @@ btnAddRow.addEventListener("click", () => {
 btnDeselectAll.addEventListener("click", clearSelection);
 
 btnDeleteRow.addEventListener("click", async () => {
-    const selectedIndexes = selectedRowElements.size
-        ? Array.from(selectedRowElements.keys())
-        : selectedRowIndex >= 0 ? [selectedRowIndex] : [];
+    const selectedIndexes = [...selectedRowIndexes];
     if (!activeTab || !selectedIndexes.length) {
         alert("Please select a row first.");
         return;
@@ -7577,7 +7584,7 @@ function renderPlayerComparison() {
 function openPlayerComparison() {
     const table = db.tables[activeTab];
     if (!table?.rows.length) return;
-    const selectedIndexes = [...selectedRowElements.keys()]
+    const selectedIndexes = [...selectedRowIndexes.keys()]
         .filter(index => Number.isInteger(index) && table.rows[index]);
     if (!selectedIndexes.length) return;
     if (selectedIndexes.length > 2) {

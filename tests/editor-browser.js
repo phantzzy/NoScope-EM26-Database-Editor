@@ -222,9 +222,97 @@
     assert(getTeamRosterEntriesForList(db.tables.Teams, db.tables.Teams.rows[1]).some(entry => entry.index === 0), 'Transferred player missing from destination');
     check('AWPer selection, unchanged boolean values, manual/automatic Potential, Rating and transfer/ID references work');
 
+    // Use more than two pages and descending names so ranges cannot rely on database order.
+    const selectionOriginalRows = db.tables.Players.rows;
+    const selectionOriginalView = viewMode;
+    const selectionOriginalGridSort = { ...gridSortStates.players };
+    const selectionOriginalListSort = listSortByTable.Players;
+    db.tables.Players.rows = Array.from({ length: PAGE_SIZE * 2 + 5 }, (_, index) => {
+        const row = [...selectionOriginalRows[0]];
+        row[0] = `Selection${String(index).padStart(3, '0')}`;
+        row[13] = `selection-${index}`;
+        row[4] = index % 2 ? 'Latvia' : 'Estonia';
+        return row;
+    });
+    gridSortStates.players = { key: 'alphabetical', direction: 'desc' };
+    listSortByTable.Players = { key: 'player', direction: 'desc' };
+    const visibleSelectionRows = () => [...tableContainer.querySelectorAll('.record-card[data-index], .entry-list-table tr[data-index]')];
+    const clickSelectionRow = (position, shiftKey = false) => visibleSelectionRows()[position].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey }));
+    const selectedIndexesSorted = () => [...selectedRowIndexes].sort((a, b) => a - b);
+    const goSelectionPage = label => [...pagination.querySelectorAll('button')].find(button => button.textContent === label).click();
+    for (const mode of ['grid', 'list']) {
+        clearSelection();
+        currentPage = 1;
+        setViewMode(mode);
+        const orderedIndexes = db.tables.Players.rows.map((_, index) => index).reverse();
+        clickSelectionRow(2, true);
+        equal(selectedIndexesSorted(), [orderedIndexes[2]], `${mode}: Shift-click without an anchor failed`);
+        clickSelectionRow(5, true);
+        equal(selectedIndexesSorted(), orderedIndexes.slice(2, 6).sort((a, b) => a - b), `${mode}: Shift-click did not select the displayed range`);
+        clickSelectionRow(7, true);
+        equal(selectedRowIndexes.size, 6, `${mode}: Repeated Shift-click lost the original anchor`);
+        clearSelection();
+        clickSelectionRow(6);
+        clickSelectionRow(2, true);
+        equal(selectedIndexesSorted(), orderedIndexes.slice(2, 7).sort((a, b) => a - b), `${mode}: Reverse Shift-click range failed`);
+
+        clearSelection();
+        clickSelectionRow(PAGE_SIZE - 2);
+        const firstSelectedIndex = orderedIndexes[PAGE_SIZE - 2];
+        goSelectionPage('Next');
+        assert(selectedRowIndexes.has(firstSelectedIndex) && !btnDeselectAll.hidden, `${mode}: Off-page selection or Deselect all was lost`);
+        clickSelectionRow(2);
+        openMassEditModal();
+        equal([...massEditTargetIndexes].sort((a, b) => a - b), [firstSelectedIndex, orderedIndexes[PAGE_SIZE + 2]].sort((a, b) => a - b), `${mode}: Mass edit omitted an off-page player`);
+        closeMassEditModal();
+        openPlayerComparison();
+        assert(!compareModal.hidden, `${mode}: Comparing selections across pages failed`);
+        closePlayerComparison();
+        goSelectionPage('Previous');
+        assert(visibleSelectionRows()[PAGE_SIZE - 2].classList.contains('selected'), `${mode}: Returning to a page lost its selection highlight`);
+        clickSelectionRow(PAGE_SIZE - 2);
+        assert(!selectedRowIndexes.has(firstSelectedIndex), `${mode}: Clicking a restored selection did not deselect it`);
+
+        clearSelection();
+        clickSelectionRow(PAGE_SIZE - 2);
+        goSelectionPage('Next');
+        clickSelectionRow(2, true);
+        equal(selectedIndexesSorted(), orderedIndexes.slice(PAGE_SIZE - 2, PAGE_SIZE + 3).sort((a, b) => a - b), `${mode}: Shift-click across pages missed players`);
+        assert(visibleSelectionRows().slice(0, 3).every(row => row.classList.contains('selected')), `${mode}: Cross-page range highlights are missing`);
+        setViewMode(mode === 'grid' ? 'list' : 'grid');
+        equal(selectedRowIndexes.size, 5, `${mode}: Switching views lost selections`);
+        btnDeselectAll.click();
+        assert(!selectedRowIndexes.size && !tableContainer.querySelector('.selected'), `${mode}: Deselect all left selections behind`);
+        goSelectionPage('Previous');
+        assert(!tableContainer.querySelector('.selected'), `${mode}: Deselect all left off-page selections behind`);
+
+        setViewMode(mode);
+        filtersByTable.Players = { 4: { equals: 'Latvia' } };
+        renderTable('Players');
+        const filteredIndexes = orderedIndexes.filter(index => index % 2);
+        clickSelectionRow(1);
+        clickSelectionRow(4, true);
+        equal(selectedIndexesSorted(), filteredIndexes.slice(1, 5).sort((a, b) => a - b), `${mode}: Range selected players excluded by filters`);
+        filtersByTable.Players = {};
+        renderTable('Players');
+        equal(selectedRowIndexes.size, 4, `${mode}: Filter change lost selections`);
+    }
+    db.tables.Players.rows.pop();
+    renderTable('Players');
+    assert(!selectedRowIndexes.size && selectionAnchorIndex === -1, 'Deleting rows left stale selection indexes');
+    clickSelectionRow(0);
+    switchTab('Teams');
+    assert(!selectedRowIndexes.size, 'Player selection leaked into another table');
+    db.tables.Players.rows = selectionOriginalRows;
+    gridSortStates.players = selectionOriginalGridSort;
+    listSortByTable.Players = selectionOriginalListSort;
+    switchTab('Players');
+    setViewMode(selectionOriginalView);
+    check('Grid and list selection supports sorted/filtered Shift-click ranges in both directions and across pages; pagination and view changes preserve selection, bulk actions include off-page players, and deselection and table/deletion resets work');
+
     // Exercise existing feature flows against the current columns.
-    selectedRowElements.set(1, document.createElement('div'));
-    selectedRowElements.set(2, document.createElement('div'));
+    selectedRowIndexes.add(1);
+    selectedRowIndexes.add(2);
     openPlayerComparison();
     assert(!compareModal.hidden, 'Player comparison failed to open');
     closePlayerComparison();

@@ -55,6 +55,8 @@ This document lists NoScope's current capabilities and the major features introd
 - Scroll wide list views horizontally without pushing the application outside the viewport.
 - Select and deselect records in either card or list view.
 - Select multiple records for deletion or bulk operations.
+- Shift-click a second player to select the complete displayed range from the original selection, including ranges spanning pages.
+- Preserve selections while paging, filtering, sorting, or switching between grid and list views.
 - Deselect all currently selected records.
 - Open records from card edit buttons or list pencil buttons.
 - Use task-focused list presets instead of one oversized table.
