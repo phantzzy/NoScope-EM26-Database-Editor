@@ -84,6 +84,7 @@ The working tree includes compatibility fixes verified against the developer dat
 - Use quick `T1-T5` attribute presets.
 - Select individual fields or whole attribute sections.
 - Update supported player statuses in bulk.
+- Remove selected players from their current teams while clearing stale roster references.
 - Validate ranges and recalculate Rating when changes are applied.
 
 ### Database Merge (Beta)
@@ -189,6 +190,7 @@ These changes are not written to the source file until **Save as .emdb...** is u
 - Select two or more players and open **Mass Edit Beta**.
 - Enable only the fields that should change.
 - Enter fixed values, randomized ranges, or a tier preset.
+- Choose **Remove from team** to make every selected player a free agent and remove their roster references.
 - Review the selected-player count before applying the changes.
 
 ### 6. Manage a team roster

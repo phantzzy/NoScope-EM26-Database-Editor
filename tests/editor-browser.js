@@ -146,6 +146,9 @@
     await sponsorImageWarning;
     check('Chosen images use the correct folder and filename syntax for every category, and missing identity uses the custom warning');
     switchTab('Teams'); openEditor(0);
+    assert(editFormFields.querySelector('.field-nick > span')?.textContent.startsWith('Short Name'), 'Team Nick was not presented as Short Name');
+    assert(editFormFields.querySelector('.field-name > span')?.textContent.startsWith('Full Name'), 'Team Name was not presented as Full Name');
+    assert(db.tables.Teams.header[0] === 'Nick' && db.tables.Teams.header[1] === 'Name', 'Team display labels changed the database headers');
     equal(teamRosterDraft, [5, 4, 3, 2, 1, 0, 6], 'Roster does not follow package order');
     const entries = getTeamRosterEntriesForList(db.tables.Teams, db.tables.Teams.rows[0]);
     equal(entries.filter(entry => entry.isBench).map(entry => entry.index), [0, 6], 'Bench does not follow package order');
@@ -347,6 +350,21 @@
     assert(db.tables.Players.rows[1][14] === '1' && db.tables.Players.rows[2][14] === '1', 'Mass edit flag encoding changed');
     assert(db.tables.Players.rows[3][7] === '18', 'Mass edit changed an unselected player');
     clearSelection();
+    const beforeTeamRemovalRows = [5, 6].map(index => [...db.tables.Players.rows[index]]);
+    const beforeTeamRemovalRoster = JSON.parse(JSON.stringify(db.roster_order));
+    selectedRowIndexes.add(5);
+    selectedRowIndexes.add(6);
+    openMassEditModal();
+    const removeTeamSection = massEditContent.querySelector('[data-mass-remove-team]');
+    assert(removeTeamSection, 'Mass Edit remove-from-team option is missing');
+    removeTeamSection.querySelector('.mass-edit-remove-team-choices button:last-child').click();
+    applyMassEdit();
+    assert(db.tables.Players.rows[5][5] === '' && db.tables.Players.rows[6][5] === '', 'Mass Edit did not clear selected player teams');
+    assert(!db.roster_order.Alpha.includes('p5') && !db.roster_order.Alpha.includes('p6'), 'Mass Edit left removed players in roster metadata');
+    db.tables.Players.rows[5] = beforeTeamRemovalRows[0];
+    db.tables.Players.rows[6] = beforeTeamRemovalRows[1];
+    db.roster_order = beforeTeamRemovalRoster;
+    clearSelection();
     const beforeMerge = getDatabaseStateSnapshot();
 
     // A different internal ID must not make an otherwise identical player an automatic addition.
@@ -436,7 +454,7 @@
     assert(db.tables.Players.rows[1][5] === 'Beta' && !db.roster_order.Alpha.includes('p1'), 'Approved merge leaves stale roster references');
     undoLastMerge();
     assert(getDatabaseStateSnapshot() === beforeMerge, 'Merge undo failed to restore tables and roster');
-    check('Comparison, mass editing, suspicious identity review, a 5,000-player incremental merge, transfers and merge undo retain their behavior');
+    check('Comparison, mass editing including team removal, suspicious identity review, a 5,000-player incremental merge, transfers and merge undo retain their behavior');
 
     let savedBlob;
     const originalSave = saveEmdbBlob;

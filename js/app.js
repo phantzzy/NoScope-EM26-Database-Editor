@@ -4035,6 +4035,52 @@ function createMassEditStatusSection(fields) {
     return section;
 }
 
+function createMassEditTeamSection(table) {
+    const teamFields = table.header.map((label, index) => ({
+        index,
+        name: normalizeFieldName(label)
+    })).filter(field => ["team", "teamname", "teamid", "rosterposition"].includes(field.name));
+    if (!teamFields.length) return null;
+    const section = document.createElement("section");
+    section.className = "mass-edit-section mass-edit-team-section";
+    section.dataset.massRemoveTeam = "false";
+    const heading = document.createElement("div");
+    heading.className = "mass-edit-section-heading";
+    const title = document.createElement("h3");
+    title.textContent = "Team assignment";
+    heading.appendChild(title);
+    const row = document.createElement("div");
+    row.className = "mass-edit-status-row mass-edit-remove-team-row";
+    const copy = document.createElement("span");
+    const label = document.createElement("strong");
+    label.textContent = "Current team";
+    const note = document.createElement("small");
+    note.textContent = "Removes every selected player from their team and roster.";
+    copy.append(label, note);
+    const choices = document.createElement("div");
+    choices.className = "mass-edit-status-choices mass-edit-remove-team-choices";
+    [["Unchanged", "false"], ["Remove from team", "true"]].forEach(([text, value]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = text;
+        button.classList.toggle("active", value === "false");
+        button.setAttribute("aria-pressed", String(value === "false"));
+        button.addEventListener("click", () => {
+            section.dataset.massRemoveTeam = value;
+            choices.querySelectorAll("button").forEach(option => {
+                const active = option === button;
+                option.classList.toggle("active", active);
+                option.setAttribute("aria-pressed", String(active));
+            });
+            setMassEditFeedback();
+        });
+        choices.appendChild(button);
+    });
+    row.append(copy, choices);
+    section.append(heading, row);
+    return section;
+}
+
 function renderMassEditModal() {
     const table = db.tables[activeTab];
     massEditContent.innerHTML = "";
@@ -4046,6 +4092,8 @@ function renderMassEditModal() {
     });
     const statusSection = createMassEditStatusSection(getMassEditStatusFields(table));
     if (statusSection) massEditContent.appendChild(statusSection);
+    const teamSection = createMassEditTeamSection(table);
+    if (teamSection) massEditContent.appendChild(teamSection);
 }
 
 function openMassEditModal() {
@@ -4129,11 +4177,12 @@ function getMassEditChanges() {
             value: row.dataset.massStatusValue
         }))
         .filter(change => change.value !== "unchanged");
-    if (!numericChanges.length && !statusChanges.length) {
+    const removeFromTeam = massEditContent.querySelector("[data-mass-remove-team]")?.dataset.massRemoveTeam === "true";
+    if (!numericChanges.length && !statusChanges.length && !removeFromTeam) {
         setMassEditFeedback("Select at least one field or status to change.");
         return null;
     }
-    return { numericChanges, statusChanges };
+    return { numericChanges, statusChanges, removeFromTeam };
 }
 
 function applyMassEdit() {
@@ -4147,8 +4196,12 @@ function applyMassEdit() {
         return;
     }
     const ratingIndex = table.header.findIndex(label => ["rating", "overall", "overallrating"].includes(normalizeFieldName(label)));
+    const teamFieldIndexes = table.header.map((label, index) => ({ index, name: normalizeFieldName(label) }))
+        .filter(field => ["team", "teamname", "teamid", "rosterposition"].includes(field.name))
+        .map(field => field.index);
     validTargets.forEach(rowIndex => {
         const row = table.rows[rowIndex];
+        const previousRow = changes.removeFromTeam ? [...row] : null;
         changes.numericChanges.forEach(change => {
             const value = Math.floor(Math.random() * (change.max - change.min + 1)) + change.min;
             row[change.index] = String(value);
@@ -4156,6 +4209,10 @@ function applyMassEdit() {
         changes.statusChanges.forEach(change => {
             row[change.index] = formatBooleanFieldValue(row[change.index], change.value === "true");
         });
+        if (changes.removeFromTeam) {
+            teamFieldIndexes.forEach(index => { row[index] = ""; });
+            updatePlayerRosterReferences(table, previousRow, row);
+        }
         if (ratingIndex >= 0) row[ratingIndex] = calculatePlayerRatingForTable(table, row).toFixed(2);
     });
     invalidatePlayerLeaderboardRanks(activeTab);
@@ -5057,6 +5114,11 @@ function renderEditorFields() {
     visibleFields.filter(field => !statusToggleIndexes.has(field.index)).forEach(({ label, index }) => {
         const field = document.createElement("label");
         const normalizedLabel = normalizeFieldName(label);
+        const displayLabel = isTeamEditor && normalizedLabel === "nick"
+            ? "Short Name"
+            : isTeamEditor && normalizedLabel === "name"
+                ? "Full Name"
+                : label;
         if (isPlayerEditor && ["dateofbirth", "birthdate", "dob"].includes(normalizedLabel)) {
             editFormFields.appendChild(createPlayerDateOfBirthField(label, index));
             return;
@@ -5128,7 +5190,7 @@ function renderEditorFields() {
         field.className = `form-field field-${normalizedLabel}`;
         if (isImageUrlField(label)) field.classList.add("image-url-field");
         const caption = document.createElement("span");
-        caption.textContent = label || `Column ${index + 1}`;
+        caption.textContent = displayLabel || `Column ${index + 1}`;
         const selectFields = ["gender", "faceit", "status"];
         const input = selectFields.includes(normalizedLabel) ? document.createElement("select") : document.createElement("input");
         if (input.tagName === "INPUT") input.type = ["dateofbirth", "birthdate", "dob"].includes(normalizedLabel) ? "date" : "text";

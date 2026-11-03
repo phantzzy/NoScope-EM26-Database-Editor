@@ -117,6 +117,7 @@ This document lists NoScope's current capabilities and the major features introd
 - Apply randomized minimum/maximum ranges.
 - Apply quick `T1-T5` attribute presets.
 - Update supported player statuses in bulk.
+- Remove selected players from their current teams and clear their main/bench roster references.
 - Validate entered ranges before applying changes.
 - Recalculate affected player Ratings.
 - Leave unselected players and fields unchanged.
