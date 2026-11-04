@@ -2342,12 +2342,14 @@ function getSponsorListColumns(tableName) {
         ...(idField ? [{
             label: "Sponsor ID",
             sortKey: "sponsorid",
+            index: idField.index,
             normalized: idField.normalized,
             getSortValue: row => String(row[idField.index] ?? "").trim()
         }] : []),
         ...fields.map(field => ({
             label: field.label,
             sortKey: field.normalized,
+            index: field.index,
             normalized: field.normalized,
             getSortValue: row => String(row[field.index] ?? "").trim()
         })),
@@ -2365,6 +2367,7 @@ function getListColumns(tableName) {
         ...getGenericListFields(tableName).map(field => ({
             label: field.label,
             sortKey: field.normalized,
+            index: field.index,
             normalized: field.normalized,
             getSortValue: row => String(row[field.index] ?? "").trim()
         })),
@@ -3052,8 +3055,11 @@ function buildGenericListTable(table, tableName, entries) {
     const source = db.tables[tableName];
     const isTeamsTable = tableName.toLowerCase() === "teams";
     const supportsImage = ["teams", "sponsors", "staff", "staffs", "tournaments"].includes(tableName.toLowerCase());
-    const fields = getGenericListFields(tableName);
-    appendListHeader(table, getListColumns(tableName), tableName);
+    const columns = getListColumns(tableName);
+    const fields = columns
+        .filter(column => column.sortable !== false && Number.isInteger(column.index))
+        .map(column => ({ label: column.label, index: column.index, normalized: column.normalized }));
+    appendListHeader(table, columns, tableName);
     const body = document.createElement("tbody");
     entries.forEach(({ row, originalIndex }) => {
         const tr = document.createElement("tr");

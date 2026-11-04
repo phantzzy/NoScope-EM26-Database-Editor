@@ -153,7 +153,12 @@
     listSortByTable.Sponsors = { key: 'sponsorid', direction: 'desc' };
     equal(sortListEntries('Sponsors', sponsorEntries).map(entry => entry.row[0]), ['100', '10', '2'], 'Sponsor ID descending sort was not numeric');
     delete listSortByTable.Sponsors;
-    check('Sponsor list view exposes a numeric Sponsor ID sort in both directions');
+    const sponsorList = createListView('Sponsors', sponsorEntries);
+    const renderedSponsorCells = [...sponsorList.querySelectorAll('tbody tr:first-child td')].map(cell => cell.textContent.trim());
+    assert(renderedSponsorCells.length === sponsorColumns.length, 'Sponsor list body columns do not align with the header');
+    assert(renderedSponsorCells[0] === '10', 'Sponsor ID header rendered without its row value');
+    assert(renderedSponsorCells[1].includes('Sponsor Ten') && renderedSponsorCells.at(-1) === '', 'Sponsor list values shifted into the wrong columns');
+    check('Sponsor list view renders aligned Sponsor ID values and sorts them numerically in both directions');
     switchTab('Teams'); openEditor(0);
     assert(editFormFields.querySelector('.field-nick > span')?.textContent.startsWith('Short Name'), 'Team Nick was not presented as Short Name');
     assert(editFormFields.querySelector('.field-name > span')?.textContent.startsWith('Full Name'), 'Team Name was not presented as Full Name');
