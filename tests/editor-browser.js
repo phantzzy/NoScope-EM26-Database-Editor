@@ -101,7 +101,7 @@
         Teams: { header: ['Nick', 'Name', 'Country', 'Rating', 'FPmap', 'SPmap', 'TPmap', 'FBmap', 'SBmap', 'TBmap', 'Female'], rows: [['Alpha', 'Alpha Team', 'Latvia', '10', 'anubis', 'cache', 'ancient', 'cache', 'dust', 'nuke', '1'], ['Beta', 'Beta Team', 'Latvia', '10', '', '', '', '', '', '', '']] },
         Tournaments: { header: ['id', 'Name', 'Tier', 'Rating', 'Prizefund', 'Type', 'Country', 'City'], rows: [['cup', 'Test cup', '4', '1', '100', 'LAN', '', '']] },
         Staff: { header: ['Nick', 'Name', 'Surname', 'Role', 'Country', 'Team', 'Id', 'Leadership', 'Vision'], rows: [['staff', 'Staff', 'Member', 'CEO', 'Latvia', 'Alpha', 'staff', '10', '10'], ['staff2', 'Second', 'Member', 'CEO', 'Estonia', 'Beta', 'staff2', '11', '11']] },
-        Sponsors: { header: ['Num', 'CompanyName', 'Description', 'Tier', 'Type'], rows: [['1', 'Sponsor', 'Description', 'S', 'Hardware']] }
+        Sponsors: { header: ['Num', 'CompanyName', 'Description', 'Tier', 'Type'], rows: [['10', 'Sponsor Ten', 'Description', 'S', 'Hardware'], ['2', 'Sponsor Two', 'Description', 'A', 'Finance'], ['100', 'Sponsor Hundred', 'Description', 'B', 'Travel']] }
     };
     for (const [name, table] of Object.entries(tables)) zip.file(`${name}.csv`, '\uFEFF' + Papa.unparse({ fields: table.header, data: table.rows }, { delimiter: ';' }));
     zip.file('roster_order.json', JSON.stringify({ Alpha: ['p5', 'p4', 'p3', 'p2', 'p1', 'p0', 'p6'], Unrelated: ['unresolved'] }));
@@ -145,6 +145,15 @@
     closeAppAlert();
     await sponsorImageWarning;
     check('Chosen images use the correct folder and filename syntax for every category, and missing identity uses the custom warning');
+    const sponsorColumns = getListColumns('Sponsors');
+    assert(sponsorColumns[0]?.label === 'Sponsor ID' && sponsorColumns[0]?.sortKey === 'sponsorid', 'Sponsor ID list sort column is missing');
+    const sponsorEntries = db.tables.Sponsors.rows.map((row, originalIndex) => ({ row, originalIndex }));
+    listSortByTable.Sponsors = { key: 'sponsorid', direction: 'asc' };
+    equal(sortListEntries('Sponsors', sponsorEntries).map(entry => entry.row[0]), ['2', '10', '100'], 'Sponsor ID ascending sort was not numeric');
+    listSortByTable.Sponsors = { key: 'sponsorid', direction: 'desc' };
+    equal(sortListEntries('Sponsors', sponsorEntries).map(entry => entry.row[0]), ['100', '10', '2'], 'Sponsor ID descending sort was not numeric');
+    delete listSortByTable.Sponsors;
+    check('Sponsor list view exposes a numeric Sponsor ID sort in both directions');
     switchTab('Teams'); openEditor(0);
     assert(editFormFields.querySelector('.field-nick > span')?.textContent.startsWith('Short Name'), 'Team Nick was not presented as Short Name');
     assert(editFormFields.querySelector('.field-name > span')?.textContent.startsWith('Full Name'), 'Team Name was not presented as Full Name');

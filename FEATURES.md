@@ -182,7 +182,7 @@ This document lists NoScope's current capabilities and the major features introd
 ### Sponsors
 
 - Edit sponsor company name, number/internal identifier, tier, type, and description.
-- Sort sponsors alphabetically or by tier.
+- Sort sponsors alphabetically, by tier, or numerically by Sponsor ID in list view.
 - Show full descriptions on sponsor-card backs.
 - Match sponsor logos using numeric identifiers where available.
 - Explain that sponsor logos do not automatically appear on in-game shirts.

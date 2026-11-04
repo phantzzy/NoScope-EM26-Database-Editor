@@ -28,7 +28,7 @@ The working tree includes compatibility fixes verified against the developer dat
 - Game-style card grids for every supported database category.
 - Focused list presets for Players, Staff, and Teams.
 - Sortable list headers with ascending and descending ordering.
-- Category-specific card sorting, including player Rating and Potential, staff Rating, team ERS, sponsor tier, and tournament prize fund.
+- Category-specific sorting, including player Rating and Potential, staff Rating, team ERS, sponsor tier and numeric Sponsor ID, and tournament prize fund.
 - Global player leaderboard ranks with gold, silver, and bronze placements.
 - Live text search, category filters, and attribute ranges.
 - Pagination with first, previous, next, last, and validated page-jump controls.
@@ -68,7 +68,7 @@ The working tree includes compatibility fixes verified against the developer dat
 - Role-aware Staff Rating calculations and sorting by name, Rating, or team ERS.
 - Focused Staff list presets for general and role-specific attributes.
 - Sponsor tier, business category, description, and image editing.
-- Sponsor sorting by name or tier, with full descriptions available on card backs.
+- Sponsor list sorting by numeric Sponsor ID, name, or tier, with full descriptions available on card backs.
 
 ### Tournaments
 

@@ -2333,11 +2333,34 @@ function getTeamListColumns(tableName) {
     ];
 }
 
+function getSponsorListColumns(tableName) {
+    const table = db.tables[tableName];
+    const availableFields = table.header.map((label, index) => ({ label, index, normalized: normalizeFieldName(label) }));
+    const idField = ["num", "sponsorid", "internalid", "id"].map(alias => availableFields.find(field => field.normalized === alias)).find(Boolean);
+    const fields = getGenericListFields(tableName).filter(field => field.index !== idField?.index);
+    return [
+        ...(idField ? [{
+            label: "Sponsor ID",
+            sortKey: "sponsorid",
+            normalized: idField.normalized,
+            getSortValue: row => String(row[idField.index] ?? "").trim()
+        }] : []),
+        ...fields.map(field => ({
+            label: field.label,
+            sortKey: field.normalized,
+            normalized: field.normalized,
+            getSortValue: row => String(row[field.index] ?? "").trim()
+        })),
+        { label: "Actions", sortable: false }
+    ];
+}
+
 function getListColumns(tableName) {
     const normalizedTable = tableName.toLowerCase();
     if (normalizedTable === "players") return getPlayerListColumns(tableName);
     if (normalizedTable === "teams") return getTeamListColumns(tableName);
     if (["staff", "staffs"].includes(normalizedTable)) return getStaffListColumns(tableName);
+    if (normalizedTable === "sponsors") return getSponsorListColumns(tableName);
     return [
         ...getGenericListFields(tableName).map(field => ({
             label: field.label,
@@ -2421,6 +2444,7 @@ function getListColumnWidth(column, tableName) {
         };
         return widths[key] || "170px";
     }
+    if (tableName.toLowerCase() === "sponsors" && key === "sponsorid") return "110px";
     if (key === "companyname" || key === "name" || key === "nickname" || key === "nick" || key === "title") return "260px";
     if (key === "country" || key === "nationality") return "190px";
     if (key === "description" || key === "desc") return "360px";
