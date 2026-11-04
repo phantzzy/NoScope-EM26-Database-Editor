@@ -59,7 +59,7 @@ The working tree includes compatibility fixes verified against the developer dat
 - Automatic fallback classification when an explicit roster position is unavailable.
 - Create a player directly from the team roster editor.
 - Roster-aware team cards and team list views.
-- Team identity, country, earnings, academy, ERS, disbanded status, and background color editing.
+- Team identity, country, earnings, academy, ERS, female-team status, disbanded status, and background color editing, with Academy and Female Team filters.
 - Team logos and background-color previews in supported card and list views.
 
 ### Staff and sponsors

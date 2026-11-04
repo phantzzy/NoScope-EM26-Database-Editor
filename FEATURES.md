@@ -49,7 +49,7 @@ This document lists NoScope's current capabilities and the major features introd
 - Use category-specific card sorting.
 - Sort list columns in ascending or descending order.
 - Search records live by relevant names and values.
-- Apply category and attribute-range filters.
+- Apply category and attribute-range filters, including Academy relationships and Female Team status for teams.
 - Navigate paginated results with first, previous, next, and last controls.
 - Jump to a validated page number.
 - Scroll wide list views horizontally without pushing the application outside the viewport.

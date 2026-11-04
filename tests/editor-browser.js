@@ -98,7 +98,7 @@
             header: ['Nick', 'Name', 'Surname', 'Birthdate', 'Country', 'Team', 'Skill', 'Potential', 'AWP', 'Rifle', 'Role1', 'Role2', 'Role3', 'Id', 'FromFaceIt', 'Retired', 'Gender'],
             rows: Array.from({ length: 7 }, (_, i) => [`Player${i}`, 'Name', `${i}`, '01.01.2005', 'Latvia', 'Alpha', '12', i ? '18' : '', '12', '12', 'AWPer', '', '', `p${i}`, '0', '', 'MALE'])
         },
-        Teams: { header: ['Nick', 'Name', 'Country', 'Rating', 'FPmap', 'SPmap', 'TPmap', 'FBmap', 'SBmap', 'TBmap', 'Female'], rows: [['Alpha', 'Alpha Team', 'Latvia', '10', 'anubis', 'cache', 'ancient', 'cache', 'dust', 'nuke', '1'], ['Beta', 'Beta Team', 'Latvia', '10', '', '', '', '', '', '', '']] },
+        Teams: { header: ['Nick', 'Name', 'Country', 'Rating', 'FPmap', 'SPmap', 'TPmap', 'FBmap', 'SBmap', 'TBmap', 'Female', 'Academy'], rows: [['Alpha', 'Alpha Team', 'Latvia', '10', 'anubis', 'cache', 'ancient', 'cache', 'dust', 'nuke', '1', 'Beta Team'], ['Beta', 'Beta Team', 'Latvia', '10', '', '', '', '', '', '', '', '']] },
         Tournaments: { header: ['id', 'Name', 'Tier', 'Rating', 'Prizefund', 'Type', 'Country', 'City'], rows: [['cup', 'Test cup', '4', '1', '100', 'LAN', '', '']] },
         Staff: { header: ['Nick', 'Name', 'Surname', 'Role', 'Country', 'Team', 'Id', 'Leadership', 'Vision'], rows: [['staff', 'Staff', 'Member', 'CEO', 'Latvia', 'Alpha', 'staff', '10', '10'], ['staff2', 'Second', 'Member', 'CEO', 'Estonia', 'Beta', 'staff2', '11', '11']] },
         Sponsors: { header: ['Num', 'CompanyName', 'Description', 'Tier', 'Type'], rows: [['10', 'Sponsor Ten', 'Description', 'S', 'Hardware'], ['2', 'Sponsor Two', 'Description', 'A', 'Finance'], ['100', 'Sponsor Hundred', 'Description', 'B', 'Travel']] }
@@ -317,6 +317,20 @@
     assert(!selectedRowIndexes.size, 'Player selection leaked into another table');
     renderFilterModal();
     filterModal.hidden = false;
+    const teamFilterDefinitions = getFilterDefinitions();
+    const academyFilter = teamFilterDefinitions.find(field => field.name === 'academy');
+    const femaleTeamFilter = teamFilterDefinitions.find(field => field.name === 'female');
+    assert(academyFilter?.type === 'select', 'Academy is missing from Team filters');
+    assert(femaleTeamFilter?.type === 'select' && femaleTeamFilter.label === 'Female Team', 'Female Team is missing from Team filters');
+    const teamFilterControls = [...filterModalContent.querySelectorAll('.filter-control')];
+    const academyFilterControl = teamFilterControls.find(control => control.querySelector(':scope > span')?.textContent === 'Academy');
+    const femaleFilterControl = teamFilterControls.find(control => control.querySelector(':scope > span')?.textContent === 'Female Team');
+    assert(academyFilterControl?.querySelector('.filter-searchable-picker'), 'Academy filter did not use a searchable team picker');
+    assert(femaleFilterControl?.querySelector('.filter-segmented'), 'Female Team filter did not use Yes/No controls');
+    assert(rowMatchesFilters('Teams', db.tables.Teams.rows[0], 0, { [academyFilter.index]: { equals: 'Beta Team' } }), 'Academy filter rejected its matching team');
+    assert(!rowMatchesFilters('Teams', db.tables.Teams.rows[1], 1, { [academyFilter.index]: { equals: 'Beta Team' } }), 'Academy filter included a team without the selected academy');
+    assert(rowMatchesFilters('Teams', db.tables.Teams.rows[0], 0, { [femaleTeamFilter.index]: { equals: 'True' } }), 'Female Team filter did not recognize a true flag');
+    assert(rowMatchesFilters('Teams', db.tables.Teams.rows[1], 1, { [femaleTeamFilter.index]: { equals: 'False' } }), 'Female Team filter did not recognize a false flag');
     const filterDialog = filterModal.querySelector('.filter-modal');
     filterDialog.style.height = '320px';
     const teamCountryPicker = filterModalContent.querySelector('.filter-searchable-picker');
@@ -340,7 +354,7 @@
     listSortByTable.Players = selectionOriginalListSort;
     switchTab('Players');
     setViewMode(selectionOriginalView);
-    check('Grid and list selection supports sorted/filtered Shift-click ranges in both directions and across pages; pagination and view changes preserve selection, bulk actions include off-page players, deselection and table/deletion resets work, and the Team Country filter stays inside its modal');
+    check('Grid and list selection supports sorted/filtered Shift-click ranges in both directions and across pages; pagination and view changes preserve selection, bulk actions include off-page players, deselection and table/deletion resets work, and Team filters include Academy and Female Team while searchable selections stay inside the modal');
 
     // Exercise existing feature flows against the current columns.
     selectedRowIndexes.add(1);

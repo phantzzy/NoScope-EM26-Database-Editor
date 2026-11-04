@@ -7703,7 +7703,7 @@ function rowMatchesFilters(tableName, row, rowIndex, filters) {
         const rawValue = String(row[columnIndex] ?? "").trim();
         const fieldName = normalizeFieldName(db.tables[tableName]?.header?.[columnIndex] || "");
         if (rule.equals !== undefined) {
-            if (["retired", "fromfaceit", "disbanded"].includes(fieldName)) return matchesBooleanFilter(rawValue, rule.equals);
+            if (["retired", "fromfaceit", "female", "disbanded"].includes(fieldName)) return matchesBooleanFilter(rawValue, rule.equals);
             if (fieldName === "gender") {
                 const expected = String(rule.equals || "").trim().toLowerCase();
                 const actual = rawValue.toLowerCase();
@@ -7901,7 +7901,7 @@ document.addEventListener("keydown", event => {
 function getFilterDefinitions() {
     const table = db.tables[activeTab];
     if (!table) return [];
-    const categoricalNames = new Set(["country", "nationality", "team", "teamid", "role", "role1", "role2", "role3", "gender", "status", "type", "tier", "retired", "fromfaceit", "disbanded"]);
+    const categoricalNames = new Set(["country", "nationality", "team", "teamid", "academy", "role", "role1", "role2", "role3", "gender", "status", "type", "tier", "retired", "fromfaceit", "female", "disbanded"]);
     const numericNames = new Set([
         "rating", "earnings", "pr", "stars", "skill", "potential", "tactic", "tactics", "awp", "rifle", "pistol", "reaction", "grenade", "grenades", "clutch",
         "leader", "leadership", "creativity", "teamwork", "conflict", "morale", "loyalty", "productivity", "stress", "stressresistance", "immunity",
@@ -7917,6 +7917,7 @@ function getFilterDefinitions() {
                 : "Fields";
             return {
                 ...field,
+                label: activeTab.toLowerCase() === "teams" && field.name === "female" ? "Female Team" : field.label,
                 group,
                 type: categoricalNames.has(field.name) ? "select" : "range",
                 slider: activeTab.toLowerCase() === "players" && group !== "Basic",
@@ -8126,7 +8127,7 @@ function renderFilterModal() {
             control.appendChild(caption);
             if (field.type === "select") {
                 const savedValue = savedFilters[field.index]?.equals || "";
-                if (["team", "teamid", "country", "nationality"].includes(field.name)) {
+                if (["team", "teamid", "academy", "country", "nationality"].includes(field.name)) {
                     control.appendChild(createFilterSearchPicker(field, savedValue));
                     grid.appendChild(control);
                     return;
@@ -8141,7 +8142,7 @@ function renderFilterModal() {
                     grid.appendChild(control);
                     return;
                 }
-                if (["retired", "fromfaceit", "disbanded"].includes(field.name)) {
+                if (["retired", "fromfaceit", "female", "disbanded"].includes(field.name)) {
                     control.appendChild(createFilterSegmented(field, savedValue, [["Yes", "True"], ["No", "False"]]));
                     grid.appendChild(control);
                     return;
