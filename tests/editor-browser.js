@@ -365,6 +365,26 @@
     db.tables.Players.rows[6] = beforeTeamRemovalRows[1];
     db.roster_order = beforeTeamRemovalRoster;
     clearSelection();
+    switchTab('Teams');
+    const beforeTeamMassEditRows = db.tables.Teams.rows.slice(0, 2).map(row => [...row]);
+    selectedRowIndexes.add(0);
+    selectedRowIndexes.add(1);
+    updateSelectionActions();
+    assert(!btnMassEdit.hidden && !btnMassEdit.disabled, 'Mass Edit was not enabled for selected teams');
+    openMassEditModal();
+    assert(massEditModalTitle.textContent === 'MASS EDIT - 2 TEAMS' && massEditTierToolbar.hidden, 'Team Mass Edit did not use its team-specific presentation');
+    assert(!massEditContent.querySelector('[data-mass-value-name="nick"], [data-mass-value-name="name"]'), 'Team Mass Edit exposed identity fields');
+    const teamCountryControl = massEditContent.querySelector('[data-mass-value-field="2"]');
+    teamCountryControl.querySelector('input[type="checkbox"]').checked = true;
+    teamCountryControl.querySelector('select').value = 'Estonia';
+    massEditContent.querySelector('[data-mass-status-field="10"]').dataset.massStatusValue = 'true';
+    applyMassEdit();
+    assert(db.tables.Teams.rows[0][2] === 'Estonia' && db.tables.Teams.rows[1][2] === 'Estonia', 'Team Mass Edit did not apply a shared country');
+    assert(db.tables.Teams.rows[0][10] === '1' && db.tables.Teams.rows[1][10] === '1', 'Team Mass Edit changed boolean encoding or missed a selected team');
+    db.tables.Teams.rows[0] = beforeTeamMassEditRows[0];
+    db.tables.Teams.rows[1] = beforeTeamMassEditRows[1];
+    clearSelection();
+    switchTab('Players');
     const beforeMerge = getDatabaseStateSnapshot();
 
     // A different internal ID must not make an otherwise identical player an automatic addition.
@@ -454,7 +474,7 @@
     assert(db.tables.Players.rows[1][5] === 'Beta' && !db.roster_order.Alpha.includes('p1'), 'Approved merge leaves stale roster references');
     undoLastMerge();
     assert(getDatabaseStateSnapshot() === beforeMerge, 'Merge undo failed to restore tables and roster');
-    check('Comparison, mass editing including team removal, suspicious identity review, a 5,000-player incremental merge, transfers and merge undo retain their behavior');
+    check('Comparison, player and team mass editing including team removal, suspicious identity review, a 5,000-player incremental merge, transfers and merge undo retain their behavior');
 
     let savedBlob;
     const originalSave = saveEmdbBlob;

@@ -434,6 +434,7 @@ const massEditModal = document.getElementById("mass-edit-modal");
 const massEditModalTitle = document.getElementById("mass-edit-modal-title");
 const massEditContent = document.getElementById("mass-edit-content");
 const massEditFeedback = document.getElementById("mass-edit-feedback");
+const massEditTierToolbar = massEditModal.querySelector(".mass-edit-tier-toolbar");
 const btnCloseMassEdit = document.getElementById("btn-close-mass-edit");
 const btnCancelMassEdit = document.getElementById("btn-cancel-mass-edit");
 const btnApplyMassEdit = document.getElementById("btn-apply-mass-edit");
@@ -3856,13 +3857,15 @@ function clearSelection() {
 
 function updateSelectionActions() {
     btnDeselectAll.hidden = selectedRowIndexes.size === 0;
-    const canMassEdit = activeTab?.toLowerCase() === "players";
+    const tableName = activeTab?.toLowerCase();
+    const isPlayerTable = tableName === "players";
+    const canMassEdit = isPlayerTable || tableName === "teams";
     btnMassEdit.hidden = !canMassEdit;
     btnMassEdit.disabled = !canMassEdit || selectedRowIndexes.size < 2;
     btnMassEdit.title = btnMassEdit.disabled
-        ? "Select at least two players to mass edit"
-        : `Mass edit ${selectedRowIndexes.size} selected players`;
-    btnCompare.disabled = !canMassEdit || selectedRowIndexes.size === 0;
+        ? `Select at least two ${tableName === "teams" ? "teams" : "players"} to mass edit`
+        : `Mass edit ${selectedRowIndexes.size} selected ${tableName === "teams" ? "teams" : "players"}`;
+    btnCompare.disabled = !isPlayerTable || selectedRowIndexes.size === 0;
     btnCompare.title = btnCompare.disabled
         ? "Select at least one player to compare"
         : `Compare ${selectedRowIndexes.size} selected player${selectedRowIndexes.size === 1 ? "" : "s"}`;
@@ -3886,11 +3889,39 @@ function getMassEditNumericFields(table) {
 }
 
 function getMassEditStatusFields(table) {
+    const supportedNames = activeTab?.toLowerCase() === "teams"
+        ? ["female", "disbanded"]
+        : ["retired", "fromfaceit"];
     return table.header.map((label, index) => ({
         label: label || `Column ${index + 1}`,
         index,
         name: normalizeFieldName(label)
-    })).filter(field => ["retired", "fromfaceit"].includes(field.name));
+    })).filter(field => supportedNames.includes(field.name));
+}
+
+function getTeamMassEditValueFields(table) {
+    const details = new Set(["country", "nationality", "earnings", "rating", "ers", "academy", "bgcolor", "bgcolour", "backgroundcolor", "backgroundcolour"]);
+    return table.header.map((label, index) => {
+        const name = normalizeFieldName(label);
+        if (!details.has(name) && !TEAM_MAP_FIELD_NAMES.includes(name)) return null;
+        const field = { label: label || `Column ${index + 1}`, index, name, section: TEAM_MAP_FIELD_NAMES.includes(name) ? "maps" : "details", type: "text" };
+        if (["country", "nationality"].includes(name)) {
+            field.type = "select";
+            field.required = true;
+            field.options = EDITOR_NATIONALITY_COUNTRIES.map(value => ({ value, label: value }));
+        } else if (TEAM_MAP_FIELD_NAMES.includes(name)) {
+            field.type = "select";
+            field.options = TEAM_MAP_OPTIONS;
+        } else if (["bgcolor", "bgcolour", "backgroundcolor", "backgroundcolour"].includes(name)) {
+            field.placeholder = "#RRGGBB";
+            field.color = true;
+        } else if (["earnings", "rating", "ers"].includes(name)) {
+            field.placeholder = "Enter a fixed value";
+        } else if (name === "academy") {
+            field.placeholder = "Academy team name; blank clears it";
+        }
+        return field;
+    }).filter(Boolean);
 }
 
 function setMassEditFeedback(message = "") {
@@ -3957,6 +3988,10 @@ function setMassEditSectionSelection(section, checked) {
         control.querySelector('input[type="checkbox"]').checked = checked;
         syncMassEditFieldControl(control);
     });
+    section.querySelectorAll(".mass-edit-value-field").forEach(control => {
+        control.querySelector('input[type="checkbox"]').checked = checked;
+        syncMassEditValueControl(control);
+    });
     setMassEditFeedback();
 }
 
@@ -3987,6 +4022,85 @@ function createMassEditNumericSection(sectionKey, fields) {
     const grid = document.createElement("div");
     grid.className = "mass-edit-grid";
     fields.forEach(field => grid.appendChild(createMassEditNumericControl(field)));
+    section.append(heading, grid);
+    return section;
+}
+
+function syncMassEditValueControl(control) {
+    const checked = control.querySelector('input[type="checkbox"]').checked;
+    control.classList.toggle("active", checked);
+    const valueControl = control.querySelector("select, input[data-mass-value]");
+    if (valueControl) valueControl.disabled = !checked;
+}
+
+function createMassEditValueControl(field) {
+    const control = document.createElement("div");
+    control.className = "mass-edit-value-field";
+    control.dataset.massValueField = String(field.index);
+    control.dataset.massValueName = field.name;
+    if (field.color) control.dataset.massValueColor = "true";
+    if (field.required) control.dataset.massValueRequired = "true";
+    const choice = document.createElement("label");
+    choice.className = "mass-edit-field-choice";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.setAttribute("aria-label", `Change ${field.label}`);
+    const checkmark = document.createElement("span");
+    checkmark.className = "mass-edit-checkmark";
+    const caption = document.createElement("span");
+    caption.textContent = field.label;
+    choice.append(checkbox, checkmark, caption);
+    let valueControl;
+    if (field.type === "select") {
+        valueControl = document.createElement("select");
+        const clear = document.createElement("option");
+        clear.value = "";
+        clear.textContent = field.required ? "Choose a value" : "Clear value";
+        valueControl.appendChild(clear);
+        field.options.forEach(optionData => {
+            const option = document.createElement("option");
+            option.value = optionData.value;
+            option.textContent = optionData.label;
+            valueControl.appendChild(option);
+        });
+    } else {
+        valueControl = document.createElement("input");
+        valueControl.type = "text";
+        valueControl.placeholder = field.placeholder || "Enter a fixed value";
+        valueControl.dataset.massValue = "";
+    }
+    valueControl.setAttribute("aria-label", `${field.label} value`);
+    control.append(choice, valueControl);
+    checkbox.addEventListener("change", () => {
+        syncMassEditValueControl(control);
+        setMassEditFeedback();
+    });
+    syncMassEditValueControl(control);
+    return control;
+}
+
+function createMassEditValueSection(sectionKey, fields) {
+    if (!fields.length) return null;
+    const section = document.createElement("section");
+    section.className = `mass-edit-section mass-edit-team-values mass-edit-team-values-${sectionKey}`;
+    const heading = document.createElement("div");
+    heading.className = "mass-edit-section-heading";
+    const title = document.createElement("h3");
+    title.textContent = sectionKey === "maps" ? "Map preferences" : "Team details";
+    const actions = document.createElement("div");
+    const selectAll = document.createElement("button");
+    selectAll.type = "button";
+    selectAll.textContent = "All";
+    const selectNone = document.createElement("button");
+    selectNone.type = "button";
+    selectNone.textContent = "None";
+    selectAll.addEventListener("click", () => setMassEditSectionSelection(section, true));
+    selectNone.addEventListener("click", () => setMassEditSectionSelection(section, false));
+    actions.append(selectAll, selectNone);
+    heading.append(title, actions);
+    const grid = document.createElement("div");
+    grid.className = "mass-edit-value-grid";
+    fields.forEach(field => grid.appendChild(createMassEditValueControl(field)));
     section.append(heading, grid);
     return section;
 }
@@ -4083,8 +4197,16 @@ function createMassEditTeamSection(table) {
 
 function renderMassEditModal() {
     const table = db.tables[activeTab];
+    const isTeamTable = activeTab?.toLowerCase() === "teams";
     massEditContent.innerHTML = "";
     setMassEditFeedback();
+    if (isTeamTable) {
+        const valueFields = getTeamMassEditValueFields(table);
+        ["details", "maps"].forEach(sectionKey => {
+            const section = createMassEditValueSection(sectionKey, valueFields.filter(field => field.section === sectionKey));
+            if (section) massEditContent.appendChild(section);
+        });
+    }
     const numericFields = getMassEditNumericFields(table);
     ["gameplay", "mental", "physical", "potential"].forEach(sectionKey => {
         const fields = numericFields.filter(field => field.section === sectionKey);
@@ -4097,14 +4219,18 @@ function renderMassEditModal() {
 }
 
 function openMassEditModal() {
-    if (activeTab?.toLowerCase() !== "players" || selectedRowIndexes.size < 2) return;
+    const tableName = activeTab?.toLowerCase();
+    if (!["players", "teams"].includes(tableName) || selectedRowIndexes.size < 2) return;
     const table = db.tables[activeTab];
     massEditTargetIndexes = [...selectedRowIndexes.keys()]
         .filter(index => Number.isInteger(index) && table.rows[index]);
     if (massEditTargetIndexes.length < 2) return;
     const count = massEditTargetIndexes.length;
-    massEditModalTitle.textContent = `MASS EDIT - ${count} PLAYERS`;
+    const entityLabel = tableName === "teams" ? "TEAMS" : "PLAYERS";
+    massEditModalTitle.textContent = `MASS EDIT - ${count} ${entityLabel}`;
     btnApplyMassEdit.textContent = `APPLY TO ${count}`;
+    massEditTierToolbar.hidden = tableName === "teams";
+    btnMassResetRanges.hidden = tableName === "teams";
     renderMassEditModal();
     massEditModal.hidden = false;
     btnCloseMassEdit.focus();
@@ -4171,6 +4297,26 @@ function getMassEditChanges() {
             max
         });
     }
+    const valueChanges = [];
+    for (const control of massEditContent.querySelectorAll(".mass-edit-value-field")) {
+        const checkbox = control.querySelector('input[type="checkbox"]');
+        if (!checkbox.checked) continue;
+        const valueControl = control.querySelector("select, input[data-mass-value]");
+        let value = String(valueControl?.value ?? "").trim();
+        const requiredValuePresent = control.dataset.massValueRequired !== "true" || Boolean(value);
+        const validColor = control.dataset.massValueColor !== "true" || !value || /^#?[0-9a-f]{6}$/i.test(value);
+        const valid = requiredValuePresent && validColor;
+        control.classList.toggle("invalid", !valid);
+        if (!valid) {
+            valueControl.focus();
+            setMassEditFeedback(requiredValuePresent
+                ? "Enter a valid six-digit background color, such as #1a2b3c."
+                : "Choose a value for every checked required field.");
+            return null;
+        }
+        if (control.dataset.massValueColor === "true" && value && !value.startsWith("#")) value = `#${value}`;
+        valueChanges.push({ index: Number(control.dataset.massValueField), value });
+    }
     const statusChanges = [...massEditContent.querySelectorAll("[data-mass-status-field]")]
         .map(row => ({
             index: Number(row.dataset.massStatusField),
@@ -4178,16 +4324,17 @@ function getMassEditChanges() {
         }))
         .filter(change => change.value !== "unchanged");
     const removeFromTeam = massEditContent.querySelector("[data-mass-remove-team]")?.dataset.massRemoveTeam === "true";
-    if (!numericChanges.length && !statusChanges.length && !removeFromTeam) {
+    if (!numericChanges.length && !valueChanges.length && !statusChanges.length && !removeFromTeam) {
         setMassEditFeedback("Select at least one field or status to change.");
         return null;
     }
-    return { numericChanges, statusChanges, removeFromTeam };
+    return { numericChanges, valueChanges, statusChanges, removeFromTeam };
 }
 
 function applyMassEdit() {
     const table = db.tables[activeTab];
-    if (!table || activeTab?.toLowerCase() !== "players") return;
+    const tableName = activeTab?.toLowerCase();
+    if (!table || !["players", "teams"].includes(tableName)) return;
     const changes = getMassEditChanges();
     if (!changes) return;
     const validTargets = massEditTargetIndexes.filter(index => table.rows[index]);
@@ -4195,7 +4342,9 @@ function applyMassEdit() {
         setMassEditFeedback("The selected players are no longer available.");
         return;
     }
-    const ratingIndex = table.header.findIndex(label => ["rating", "overall", "overallrating"].includes(normalizeFieldName(label)));
+    const ratingIndex = tableName === "players"
+        ? table.header.findIndex(label => ["rating", "overall", "overallrating"].includes(normalizeFieldName(label)))
+        : -1;
     const teamFieldIndexes = table.header.map((label, index) => ({ index, name: normalizeFieldName(label) }))
         .filter(field => ["team", "teamname", "teamid", "rosterposition"].includes(field.name))
         .map(field => field.index);
@@ -4206,6 +4355,7 @@ function applyMassEdit() {
             const value = Math.floor(Math.random() * (change.max - change.min + 1)) + change.min;
             row[change.index] = String(value);
         });
+        changes.valueChanges.forEach(change => { row[change.index] = change.value; });
         changes.statusChanges.forEach(change => {
             row[change.index] = formatBooleanFieldValue(row[change.index], change.value === "true");
         });
@@ -4220,7 +4370,8 @@ function applyMassEdit() {
     const count = validTargets.length;
     closeMassEditModal();
     renderTable(activeTab);
-    setStatus(`Mass edited ${count} player${count === 1 ? "" : "s"}.`, "success");
+    const entity = tableName === "teams" ? "team" : "player";
+    setStatus(`Mass edited ${count} ${entity}${count === 1 ? "" : "s"}.`, "success");
 }
 
 btnMassEdit.addEventListener("click", openMassEditModal);

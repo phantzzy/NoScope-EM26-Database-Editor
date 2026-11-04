@@ -122,6 +122,14 @@ This document lists NoScope's current capabilities and the major features introd
 - Recalculate affected player Ratings.
 - Leave unselected players and fields unchanged.
 
+### Team Mass Edit (Beta)
+
+- Open Mass Edit when two or more teams are selected.
+- Bulk-edit country, earnings, Rating, ERS, academy, background color, and all six map preferences.
+- Update Female and Disbanded flags while preserving each row's existing boolean encoding.
+- Keep Short Name and Full Name excluded to prevent accidental duplicate team identities.
+- Leave unselected teams and unchecked fields unchanged.
+
 ### Teams
 
 - Edit team nickname, full name, country, earnings, ERS, academy relationship, internal fields, and status.

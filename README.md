@@ -77,14 +77,16 @@ The working tree includes compatibility fixes verified against the developer dat
 - Fixed OpenStreetMap preview for the selected city.
 - Tournament tier, event type, prize fund, and location editing.
 
-### Mass Edit (Beta)
+### Player and Team Mass Edit (Beta)
 
-- Open Mass Edit after selecting two or more players.
+- Open Mass Edit after selecting two or more players or teams.
 - Apply fixed values or randomized ranges to selected attributes.
 - Use quick `T1-T5` attribute presets.
 - Select individual fields or whole attribute sections.
 - Update supported player statuses in bulk.
 - Remove selected players from their current teams while clearing stale roster references.
+- Bulk-edit team country, earnings, Rating, ERS, academy, background color, map preferences, and supported status flags.
+- Protect team identity by keeping Short Name and Full Name unavailable in Mass Edit.
 - Validate ranges and recalculate Rating when changes are applied.
 
 ### Database Merge (Beta)
@@ -184,7 +186,7 @@ These changes are not written to the source file until **Save as .emdb...** is u
 - Use **Randomize** without an age to generate an age from `16-26`.
 - Use **Clear** before replacing an existing birthday.
 
-### 5. Compare or mass edit players
+### 5. Compare players or mass edit players and teams
 
 - Select exactly two players and open **Compare** for a side-by-side view.
 - Select two or more players and open **Mass Edit Beta**.
@@ -192,6 +194,7 @@ These changes are not written to the source file until **Save as .emdb...** is u
 - Enter fixed values, randomized ranges, or a tier preset.
 - Choose **Remove from team** to make every selected player a free agent and remove their roster references.
 - Review the selected-player count before applying the changes.
+- Select two or more teams to bulk-edit shared details, maps, or status flags; team names are intentionally excluded.
 
 ### 6. Manage a team roster
 

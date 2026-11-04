@@ -1091,6 +1091,15 @@ body.noscope-desktop .desktop-titlebar {
 .mass-edit-range input:focus { border-color:var(--accent); }
 .mass-edit-range input:disabled { opacity:.42; cursor:not-allowed; }
 .mass-edit-field.invalid .mass-edit-range input { border-color:var(--error); }
+.mass-edit-value-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+.mass-edit-value-field { display:grid; grid-template-columns:minmax(135px,.8fr) minmax(160px,1.2fr); align-items:center; gap:12px; min-width:0; }
+.mass-edit-value-field > input[type="text"],.mass-edit-value-field > select { width:100%; height:34px; min-width:0; padding:0 9px; border:1px solid #343941; border-radius:3px; outline:none; background:#22262c; color:#edf0f3; font:.68rem var(--font-sans); }
+.mass-edit-value-field > input[type="text"]:focus,.mass-edit-value-field > select:focus { border-color:var(--accent); }
+.mass-edit-value-field > input[type="text"]:disabled,.mass-edit-value-field > select:disabled { opacity:.42; cursor:not-allowed; }
+.mass-edit-value-field.active .mass-edit-field-choice { color:#e4e7eb; }
+.mass-edit-value-field.invalid > input,.mass-edit-value-field.invalid > select { border-color:var(--error); }
+.mass-edit-team-values-details .mass-edit-section-heading h3 { color:#61bfd1; }
+.mass-edit-team-values-maps .mass-edit-section-heading h3 { color:#e4bd58; }
 .mass-edit-status-list { display:grid; gap:9px; }
 .mass-edit-status-row { display:grid; grid-template-columns:minmax(130px,1fr) minmax(280px,auto); align-items:center; gap:18px; color:#a7aeb8; font-size:.72rem; }
 .mass-edit-status-choices { display:grid; grid-template-columns:1.45fr .75fr .75fr; min-width:300px; overflow:hidden; border:1px solid #343941; border-radius:3px; }
@@ -1108,8 +1117,8 @@ body.noscope-desktop .desktop-titlebar {
 .mass-edit-actions { flex:none; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:15px 24px; border-top:1px solid #2c3036; background:#121417; }
 .mass-edit-actions > div { display:flex; flex-wrap:wrap; gap:8px; }
 .mass-edit-actions .btn { min-height:35px; }
-@media(max-width:720px){.mass-edit-modal-backdrop{padding:8px}.mass-edit-modal{width:100%;max-height:calc(100vh - 16px)}.mass-edit-grid{grid-template-columns:1fr}.mass-edit-content{padding-inline:16px}.mass-edit-tier-toolbar,.mass-edit-actions{padding-inline:16px}.mass-edit-actions{align-items:stretch;flex-direction:column}.mass-edit-actions>div:last-child{justify-content:flex-end}.mass-edit-status-row{grid-template-columns:1fr}.mass-edit-status-choices{min-width:0}}
-@media(max-width:440px){.mass-edit-field{grid-template-columns:1fr}.mass-edit-range{padding-left:25px;justify-content:start}.mass-edit-status-choices{grid-template-columns:1fr}.mass-edit-tier-toolbar>span{width:100%}}
+@media(max-width:720px){.mass-edit-modal-backdrop{padding:8px}.mass-edit-modal{width:100%;max-height:calc(100vh - 16px)}.mass-edit-grid,.mass-edit-value-grid{grid-template-columns:1fr}.mass-edit-content{padding-inline:16px}.mass-edit-tier-toolbar,.mass-edit-actions{padding-inline:16px}.mass-edit-actions{align-items:stretch;flex-direction:column}.mass-edit-actions>div:last-child{justify-content:flex-end}.mass-edit-status-row{grid-template-columns:1fr}.mass-edit-status-choices{min-width:0}}
+@media(max-width:440px){.mass-edit-field,.mass-edit-value-field{grid-template-columns:1fr}.mass-edit-range{padding-left:25px;justify-content:start}.mass-edit-status-choices{grid-template-columns:1fr}.mass-edit-tier-toolbar>span{width:100%}}
 .merge-trigger { display:inline-flex; align-items:center; gap:6px; }
 .merge-modal-backdrop { z-index:147; padding:18px; }
 .merge-modal { display:flex; flex-direction:column; width:min(1220px,calc(100vw - 36px)); max-height:calc(100vh - 36px); overflow:hidden; border:1px solid #3a3e46; border-top:2px solid var(--accent); background:#14161a; box-shadow:0 24px 90px rgba(0,0,0,.82); }
@@ -4166,6 +4175,8 @@ tr:hover:not(.selected) {
 :root[data-theme="light"] .mass-edit-tier-toolbar button,
 :root[data-theme="light"] .mass-edit-checkmark,
 :root[data-theme="light"] .mass-edit-range input,
+:root[data-theme="light"] .mass-edit-value-field > input[type="text"],
+:root[data-theme="light"] .mass-edit-value-field > select,
 :root[data-theme="light"] .mass-edit-status-choices,
 :root[data-theme="light"] .mass-edit-status-choices button {
     border-color:#cfd7e2;
@@ -4173,6 +4184,7 @@ tr:hover:not(.selected) {
     color:#526173;
 }
 :root[data-theme="light"] .mass-edit-field.active .mass-edit-field-choice,
+:root[data-theme="light"] .mass-edit-value-field.active .mass-edit-field-choice,
 :root[data-theme="light"] .mass-edit-section-heading button:hover,
 :root[data-theme="light"] .mass-edit-status-choices button:hover {
     color:#17202b;
