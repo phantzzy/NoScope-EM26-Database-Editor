@@ -100,7 +100,7 @@
         },
         Teams: { header: ['Nick', 'Name', 'Country', 'Rating', 'FPmap', 'SPmap', 'TPmap', 'FBmap', 'SBmap', 'TBmap', 'Female'], rows: [['Alpha', 'Alpha Team', 'Latvia', '10', 'anubis', 'cache', 'ancient', 'cache', 'dust', 'nuke', '1'], ['Beta', 'Beta Team', 'Latvia', '10', '', '', '', '', '', '', '']] },
         Tournaments: { header: ['id', 'Name', 'Tier', 'Rating', 'Prizefund', 'Type', 'Country', 'City'], rows: [['cup', 'Test cup', '4', '1', '100', 'LAN', '', '']] },
-        Staff: { header: ['Nick', 'Name', 'Surname', 'Role', 'Country', 'Team', 'Id', 'Leadership', 'Vision'], rows: [['staff', 'Staff', 'Member', 'CEO', 'Latvia', 'Alpha', 'staff', '10', '10']] },
+        Staff: { header: ['Nick', 'Name', 'Surname', 'Role', 'Country', 'Team', 'Id', 'Leadership', 'Vision'], rows: [['staff', 'Staff', 'Member', 'CEO', 'Latvia', 'Alpha', 'staff', '10', '10'], ['staff2', 'Second', 'Member', 'CEO', 'Estonia', 'Beta', 'staff2', '11', '11']] },
         Sponsors: { header: ['Num', 'CompanyName', 'Description', 'Tier', 'Type'], rows: [['1', 'Sponsor', 'Description', 'S', 'Hardware']] }
     };
     for (const [name, table] of Object.entries(tables)) zip.file(`${name}.csv`, '\uFEFF' + Papa.unparse({ fields: table.header, data: table.rows }, { delimiter: ';' }));
@@ -384,6 +384,29 @@
     db.tables.Teams.rows[0] = beforeTeamMassEditRows[0];
     db.tables.Teams.rows[1] = beforeTeamMassEditRows[1];
     clearSelection();
+    switchTab('Staff');
+    const beforeStaffMassEditRows = db.tables.Staff.rows.slice(0, 2).map(row => [...row]);
+    const beforeStaffMassEditRoster = JSON.parse(JSON.stringify(db.roster_order));
+    selectedRowIndexes.add(0);
+    selectedRowIndexes.add(1);
+    updateSelectionActions();
+    assert(!btnMassEdit.hidden && !btnMassEdit.disabled, 'Mass Edit was not enabled for selected staff');
+    openMassEditModal();
+    assert(massEditModalTitle.textContent === 'MASS EDIT - 2 STAFF' && !massEditTierToolbar.hidden, 'Staff Mass Edit did not use its staff-specific presentation');
+    const leadershipControl = massEditContent.querySelector('[data-mass-edit-field="7"]');
+    leadershipControl.querySelector('input[type="checkbox"]').checked = true;
+    leadershipControl.querySelector('[data-mass-range="min"]').value = '14';
+    leadershipControl.querySelector('[data-mass-range="max"]').value = '14';
+    const staffRemoveTeamSection = massEditContent.querySelector('[data-mass-remove-team]');
+    assert(staffRemoveTeamSection, 'Staff Mass Edit remove-from-team option is missing');
+    staffRemoveTeamSection.querySelector('.mass-edit-remove-team-choices button:last-child').click();
+    applyMassEdit();
+    assert(db.tables.Staff.rows[0][5] === '' && db.tables.Staff.rows[1][5] === '', 'Staff Mass Edit did not clear selected staff teams');
+    assert(db.tables.Staff.rows[0][7] === '14' && db.tables.Staff.rows[1][7] === '14', 'Staff Mass Edit did not apply an attribute range');
+    equal(db.roster_order, beforeStaffMassEditRoster, 'Removing staff from teams altered player roster metadata');
+    db.tables.Staff.rows[0] = beforeStaffMassEditRows[0];
+    db.tables.Staff.rows[1] = beforeStaffMassEditRows[1];
+    clearSelection();
     switchTab('Players');
     const beforeMerge = getDatabaseStateSnapshot();
 
@@ -474,7 +497,7 @@
     assert(db.tables.Players.rows[1][5] === 'Beta' && !db.roster_order.Alpha.includes('p1'), 'Approved merge leaves stale roster references');
     undoLastMerge();
     assert(getDatabaseStateSnapshot() === beforeMerge, 'Merge undo failed to restore tables and roster');
-    check('Comparison, player and team mass editing including team removal, suspicious identity review, a 5,000-player incremental merge, transfers and merge undo retain their behavior');
+    check('Comparison, player, staff and team mass editing including safe team removal, suspicious identity review, a 5,000-player incremental merge, transfers and merge undo retain their behavior');
 
     let savedBlob;
     const originalSave = saveEmdbBlob;

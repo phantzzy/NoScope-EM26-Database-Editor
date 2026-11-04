@@ -77,9 +77,9 @@ The working tree includes compatibility fixes verified against the developer dat
 - Fixed OpenStreetMap preview for the selected city.
 - Tournament tier, event type, prize fund, and location editing.
 
-### Player and Team Mass Edit (Beta)
+### Player, Staff, and Team Mass Edit (Beta)
 
-- Open Mass Edit after selecting two or more players or teams.
+- Open Mass Edit after selecting two or more players, staff members, or teams.
 - Apply fixed values or randomized ranges to selected attributes.
 - Use quick `T1-T5` attribute presets.
 - Select individual fields or whole attribute sections.
@@ -87,6 +87,7 @@ The working tree includes compatibility fixes verified against the developer dat
 - Remove selected players from their current teams while clearing stale roster references.
 - Bulk-edit team country, earnings, Rating, ERS, academy, background color, map preferences, and supported status flags.
 - Protect team identity by keeping Short Name and Full Name unavailable in Mass Edit.
+- Apply attribute ranges to selected staff members and remove them from their current teams without affecting player rosters.
 - Validate ranges and recalculate Rating when changes are applied.
 
 ### Database Merge (Beta)
@@ -186,7 +187,7 @@ These changes are not written to the source file until **Save as .emdb...** is u
 - Use **Randomize** without an age to generate an age from `16-26`.
 - Use **Clear** before replacing an existing birthday.
 
-### 5. Compare players or mass edit players and teams
+### 5. Compare players or mass edit players, staff, and teams
 
 - Select exactly two players and open **Compare** for a side-by-side view.
 - Select two or more players and open **Mass Edit Beta**.
@@ -195,6 +196,7 @@ These changes are not written to the source file until **Save as .emdb...** is u
 - Choose **Remove from team** to make every selected player a free agent and remove their roster references.
 - Review the selected-player count before applying the changes.
 - Select two or more teams to bulk-edit shared details, maps, or status flags; team names are intentionally excluded.
+- Select two or more staff members to bulk-edit attributes or remove them from their current teams.
 
 ### 6. Manage a team roster
 

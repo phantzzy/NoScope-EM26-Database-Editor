@@ -3859,12 +3859,14 @@ function updateSelectionActions() {
     btnDeselectAll.hidden = selectedRowIndexes.size === 0;
     const tableName = activeTab?.toLowerCase();
     const isPlayerTable = tableName === "players";
-    const canMassEdit = isPlayerTable || tableName === "teams";
+    const isStaffTable = ["staff", "staffs"].includes(tableName);
+    const canMassEdit = isPlayerTable || tableName === "teams" || isStaffTable;
+    const entityLabel = tableName === "teams" ? "teams" : isStaffTable ? "staff members" : "players";
     btnMassEdit.hidden = !canMassEdit;
     btnMassEdit.disabled = !canMassEdit || selectedRowIndexes.size < 2;
     btnMassEdit.title = btnMassEdit.disabled
-        ? `Select at least two ${tableName === "teams" ? "teams" : "players"} to mass edit`
-        : `Mass edit ${selectedRowIndexes.size} selected ${tableName === "teams" ? "teams" : "players"}`;
+        ? `Select at least two ${entityLabel} to mass edit`
+        : `Mass edit ${selectedRowIndexes.size} selected ${entityLabel}`;
     btnCompare.disabled = !isPlayerTable || selectedRowIndexes.size === 0;
     btnCompare.title = btnCompare.disabled
         ? "Select at least one player to compare"
@@ -3872,8 +3874,19 @@ function updateSelectionActions() {
 }
 
 function getMassEditNumericFields(table) {
+    const isStaffTable = ["staff", "staffs"].includes(activeTab?.toLowerCase());
+    const staffSkillNames = isStaffTable ? new Set([
+        ...getStaffRoleSkillNames(""),
+        ...getStaffCommonSkillNames(),
+        ...["coach", "cfo", "ceo", "eventmanager", "prmanager", "lawyer", "analyst", "physio", "scout", "psychologist"]
+            .flatMap(role => getStaffRoleSkillNames(role))
+    ]) : null;
     return table.header.map((label, index) => {
         const name = normalizeFieldName(label);
+        if (isStaffTable) {
+            if (!staffSkillNames.has(name)) return null;
+            return { label: label || `Column ${index + 1}`, index, name, section: "staff", min: 1, max: 20 };
+        }
         const detectedSection = getFieldSection(label);
         const section = name === "pr" ? "mental" : detectedSection;
         if (!["gameplay", "mental", "physical", "potential"].includes(section)) return null;
@@ -3889,9 +3902,12 @@ function getMassEditNumericFields(table) {
 }
 
 function getMassEditStatusFields(table) {
-    const supportedNames = activeTab?.toLowerCase() === "teams"
+    const tableName = activeTab?.toLowerCase();
+    const supportedNames = tableName === "teams"
         ? ["female", "disbanded"]
-        : ["retired", "fromfaceit"];
+        : ["staff", "staffs"].includes(tableName)
+            ? ["retired"]
+            : ["retired", "fromfaceit"];
     return table.header.map((label, index) => ({
         label: label || `Column ${index + 1}`,
         index,
@@ -4000,7 +4016,8 @@ function createMassEditNumericSection(sectionKey, fields) {
         gameplay: "Combat",
         mental: "Mental",
         physical: "Physical",
-        potential: "Development"
+        potential: "Development",
+        staff: "Staff attributes"
     };
     const section = document.createElement("section");
     section.className = `mass-edit-section mass-edit-section-${sectionKey}`;
@@ -4169,7 +4186,9 @@ function createMassEditTeamSection(table) {
     const label = document.createElement("strong");
     label.textContent = "Current team";
     const note = document.createElement("small");
-    note.textContent = "Removes every selected player from their team and roster.";
+    note.textContent = ["staff", "staffs"].includes(activeTab?.toLowerCase())
+        ? "Removes every selected staff member from their current team."
+        : "Removes every selected player from their team and roster.";
     copy.append(label, note);
     const choices = document.createElement("div");
     choices.className = "mass-edit-status-choices mass-edit-remove-team-choices";
@@ -4197,7 +4216,9 @@ function createMassEditTeamSection(table) {
 
 function renderMassEditModal() {
     const table = db.tables[activeTab];
-    const isTeamTable = activeTab?.toLowerCase() === "teams";
+    const tableName = activeTab?.toLowerCase();
+    const isTeamTable = tableName === "teams";
+    const isStaffTable = ["staff", "staffs"].includes(tableName);
     massEditContent.innerHTML = "";
     setMassEditFeedback();
     if (isTeamTable) {
@@ -4208,7 +4229,7 @@ function renderMassEditModal() {
         });
     }
     const numericFields = getMassEditNumericFields(table);
-    ["gameplay", "mental", "physical", "potential"].forEach(sectionKey => {
+    (isStaffTable ? ["staff"] : ["gameplay", "mental", "physical", "potential"]).forEach(sectionKey => {
         const fields = numericFields.filter(field => field.section === sectionKey);
         if (fields.length) massEditContent.appendChild(createMassEditNumericSection(sectionKey, fields));
     });
@@ -4220,13 +4241,13 @@ function renderMassEditModal() {
 
 function openMassEditModal() {
     const tableName = activeTab?.toLowerCase();
-    if (!["players", "teams"].includes(tableName) || selectedRowIndexes.size < 2) return;
+    if (!["players", "teams", "staff", "staffs"].includes(tableName) || selectedRowIndexes.size < 2) return;
     const table = db.tables[activeTab];
     massEditTargetIndexes = [...selectedRowIndexes.keys()]
         .filter(index => Number.isInteger(index) && table.rows[index]);
     if (massEditTargetIndexes.length < 2) return;
     const count = massEditTargetIndexes.length;
-    const entityLabel = tableName === "teams" ? "TEAMS" : "PLAYERS";
+    const entityLabel = tableName === "teams" ? "TEAMS" : ["staff", "staffs"].includes(tableName) ? "STAFF" : "PLAYERS";
     massEditModalTitle.textContent = `MASS EDIT - ${count} ${entityLabel}`;
     btnApplyMassEdit.textContent = `APPLY TO ${count}`;
     massEditTierToolbar.hidden = tableName === "teams";
@@ -4334,7 +4355,8 @@ function getMassEditChanges() {
 function applyMassEdit() {
     const table = db.tables[activeTab];
     const tableName = activeTab?.toLowerCase();
-    if (!table || !["players", "teams"].includes(tableName)) return;
+    const isStaffTable = ["staff", "staffs"].includes(tableName);
+    if (!table || !["players", "teams", "staff", "staffs"].includes(tableName)) return;
     const changes = getMassEditChanges();
     if (!changes) return;
     const validTargets = massEditTargetIndexes.filter(index => table.rows[index]);
@@ -4342,7 +4364,7 @@ function applyMassEdit() {
         setMassEditFeedback("The selected players are no longer available.");
         return;
     }
-    const ratingIndex = tableName === "players"
+    const ratingIndex = tableName === "players" || isStaffTable
         ? table.header.findIndex(label => ["rating", "overall", "overallrating"].includes(normalizeFieldName(label)))
         : -1;
     const teamFieldIndexes = table.header.map((label, index) => ({ index, name: normalizeFieldName(label) }))
@@ -4361,16 +4383,18 @@ function applyMassEdit() {
         });
         if (changes.removeFromTeam) {
             teamFieldIndexes.forEach(index => { row[index] = ""; });
-            updatePlayerRosterReferences(table, previousRow, row);
+            if (tableName === "players") updatePlayerRosterReferences(table, previousRow, row);
         }
-        if (ratingIndex >= 0) row[ratingIndex] = calculatePlayerRatingForTable(table, row).toFixed(2);
+        if (ratingIndex >= 0) row[ratingIndex] = (isStaffTable
+            ? calculateStaffRatingForTable(table, row)
+            : calculatePlayerRatingForTable(table, row)).toFixed(2);
     });
     invalidatePlayerLeaderboardRanks(activeTab);
     markUnsavedChanges();
     const count = validTargets.length;
     closeMassEditModal();
     renderTable(activeTab);
-    const entity = tableName === "teams" ? "team" : "player";
+    const entity = tableName === "teams" ? "team" : isStaffTable ? "staff member" : "player";
     setStatus(`Mass edited ${count} ${entity}${count === 1 ? "" : "s"}.`, "success");
 }
 

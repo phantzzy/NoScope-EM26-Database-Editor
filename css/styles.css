@@ -1073,6 +1073,7 @@ body.noscope-desktop .desktop-titlebar {
 .mass-edit-section-mental .mass-edit-section-heading h3 { color:#61bfd1; }
 .mass-edit-section-physical .mass-edit-section-heading h3 { color:#73c889; }
 .mass-edit-section-potential .mass-edit-section-heading h3 { color:#e4bd58; }
+.mass-edit-section-staff .mass-edit-section-heading h3 { color:#9b8ee7; }
 .mass-edit-section-heading > div { display:flex; gap:5px; }
 .mass-edit-section-heading button { padding:2px 3px; border:0; border-bottom:1px solid transparent; background:transparent; color:#747c87; font:.6rem var(--font-sans); cursor:pointer; }
 .mass-edit-section-heading button:hover { border-bottom-color:currentColor; color:#d7dbe0; }

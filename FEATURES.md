@@ -130,6 +130,14 @@ This document lists NoScope's current capabilities and the major features introd
 - Keep Short Name and Full Name excluded to prevent accidental duplicate team identities.
 - Leave unselected teams and unchecked fields unchanged.
 
+### Staff Mass Edit (Beta)
+
+- Open Mass Edit when two or more staff members are selected.
+- Apply fixed values or randomized ranges to supported role and common attributes.
+- Remove selected staff members from their current teams without changing player roster metadata.
+- Recalculate Staff Rating after attribute changes when the database contains a Rating field.
+- Leave unselected staff and unchecked fields unchanged.
+
 ### Teams
 
 - Edit team nickname, full name, country, earnings, ERS, academy relationship, internal fields, and status.
